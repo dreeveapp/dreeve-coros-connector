@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,10 +23,14 @@ commands:
 
 type Env func(string) string
 
+type umask os.FileMode
+
+func (u umask) apply(perm os.FileMode) os.FileMode { return perm &^ os.FileMode(u) }
+
 type app struct {
 	log     *slog.Logger
 	secrets *logging.Secrets
-	umask   os.FileMode
+	umask   umask
 }
 
 func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Writer) int {
@@ -64,22 +69,18 @@ func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Write
 
 func newApp(getenv Env, w io.Writer) (*app, error) {
 	secrets := &logging.Secrets{}
-	a := &app{log: logging.New(w, slog.LevelInfo, logging.Text, secrets), secrets: secrets}
-	format, err := logging.ParseFormat(getenv("LOG_FORMAT"))
-	if err != nil {
+	format, formatErr := logging.ParseFormat(getenv("LOG_FORMAT"))
+	level, levelErr := logging.ParseLevel(getenv("LOG_LEVEL"))
+	a := &app{log: logging.New(w, level, format, secrets), secrets: secrets}
+	if err := errors.Join(formatErr, levelErr); err != nil {
 		return a, err
 	}
-	a.log = logging.New(w, slog.LevelInfo, format, secrets)
-	level, err := logging.ParseLevel(getenv("LOG_LEVEL"))
-	if err != nil {
-		return a, err
-	}
-	a.log = logging.New(w, level, format, secrets)
+	var err error
 	a.umask, err = parseUmask(getenv("UMASK"))
 	return a, err
 }
 
-func parseUmask(raw string) (os.FileMode, error) {
+func parseUmask(raw string) (umask, error) {
 	if raw == "" {
 		return 0o022, nil
 	}
@@ -87,5 +88,5 @@ func parseUmask(raw string) (os.FileMode, error) {
 	if err != nil || n > 0o777 {
 		return 0, fmt.Errorf("UMASK must be an octal permission mask such as 022, got %q", raw)
 	}
-	return os.FileMode(n), nil
+	return umask(n), nil
 }

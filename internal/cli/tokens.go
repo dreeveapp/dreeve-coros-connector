@@ -23,12 +23,12 @@ type storedToken struct {
 	IssuedAt time.Time `json:"issuedAt"`
 }
 
-func saveToken(dir string, umask os.FileMode, tok storedToken) error {
+func saveToken(dir string, mode os.FileMode, tok storedToken) error {
 	data, err := json.MarshalIndent(tok, "", "  ")
 	if err != nil {
 		return err
 	}
-	return atomicfile.Write(dir, "."+tokenFileName+".tmp", tokenFileName, 0o600&^umask, bytes.NewReader(append(data, '\n')))
+	return atomicfile.Write(dir, "."+tokenFileName+".tmp", tokenFileName, mode, bytes.NewReader(append(data, '\n')))
 }
 
 func loadToken(dir string) (storedToken, error) {

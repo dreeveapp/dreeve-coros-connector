@@ -57,7 +57,7 @@ func newSyncer(getenv Env, a *app) (*syncer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &syncer{dryRun: dryRun, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: 0o666 &^ a.umask, log: a.log, secrets: a.secrets}, nil
+	return &syncer{dryRun: dryRun, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
 }
 
 func syncOnce(ctx context.Context, getenv Env, a *app) error {
@@ -141,7 +141,7 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 	}
 	slices.SortStableFunc(activities, func(a, b coros.Activity) int { return cmp.Compare(a.StartTime, b.StartTime) })
 
-	var delivered, retry, attempted, deferred int
+	var delivered, wouldDeliver, retry, attempted, deferred int
 	completeUntil := today
 	keepInWindow := func(a coros.Activity) {
 		if day := startOfDay(time.Unix(a.StartTime, 0).In(s.zone)).AddDate(0, 0, -1); day.Before(completeUntil) {
@@ -157,17 +157,17 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 			s.log.Warn("skipped activity with an unexpected id", "labelId", a.LabelID, "name", a.Name)
 			continue
 		}
+		if s.dryRun {
+			wouldDeliver++
+			s.log.Info("dry run: would deliver", "file", fitName(a.LabelID), "labelId", a.LabelID, "name", a.Name, "thisCycle", wouldDeliver <= s.limits.maxDownloads)
+			continue
+		}
 		if attempted == s.limits.maxDownloads {
 			keepInWindow(a)
 			deferred++
 			continue
 		}
 		attempted++
-		if s.dryRun {
-			delivered++
-			s.log.Info("dry run: would deliver", "file", fitName(a.LabelID), "labelId", a.LabelID, "name", a.Name)
-			continue
-		}
 		if err := th.Pace(ctx); err != nil {
 			return statusCounts(l), err
 		}
@@ -209,7 +209,7 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 		return statusCounts(l), &fatalError{err}
 	}
 	if s.dryRun {
-		s.log.Info(label+" dry run finished, nothing written", "listed", len(activities), "since", from.Format(time.DateOnly), "wouldDeliver", delivered, "leftForNextCycle", deferred)
+		s.log.Info(label+" dry run finished, nothing written", "listed", len(activities), "since", from.Format(time.DateOnly), "wouldDeliver", wouldDeliver, "maxPerCycle", s.limits.maxDownloads)
 		return statusCounts(l), nil
 	}
 	s.log.Info(label+" finished", "listed", len(activities), "since", from.Format(time.DateOnly), "delivered", delivered, "toRetry", retry, "leftForNextCycle", deferred)

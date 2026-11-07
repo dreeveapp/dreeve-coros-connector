@@ -36,13 +36,13 @@ Before contacting COROS, `sync-once` and `run`:
 
 ## Dry run
 
-With `DRY_RUN=true`, `sync-once` and `run` list your activities and log each one that would be delivered (`dry run: would deliver`, with its file name), then a summary. They skip the startup checks and write nothing: no file in `/watch`, no `.part` cleanup, no ledger change (not even a 429 backoff), so a dry run also works on read-only volumes. Download links are not requested. The token must still be valid, and an existing backoff is still respected.
+With `DRY_RUN=true`, `sync-once` and `run` list your activities and log each one that would be delivered (`dry run: would deliver`, with its file name), then a summary. They skip the startup checks and write nothing: no file in `/watch`, no `.part` cleanup, no ledger change (not even a 429 backoff), so a dry run also works on read-only volumes. Download links are not requested. The token must still be valid, and an existing backoff is still respected. Every activity that is not yet settled is listed, including those beyond `MAX_DOWNLOADS_PER_CYCLE` (`thisCycle=false`). Under `run`, each cycle lists the same activities again, since nothing is recorded, and `/status` keeps reporting the ledger's counts as they were.
 
 ## Logs
 
 Every log line goes to stderr; stdout stays empty except for `help`. `LOG_FORMAT=json` writes one JSON object per line with `time`, `level` and `msg`, plus fields such as `labelId`, `file` or `error`; the default `text` writes `key=value` lines. `LOG_LEVEL` keeps records at that level and above: `debug` adds the token's host, region and age, the listed date range and the activities already settled.
 
-The COROS password and access token are replaced with `[REDACTED]` wherever they would appear in a log line, at every level, as is the value of any field named `token`, `accessToken`, `password` or `pwd`.
+The COROS password and access token are replaced with `[REDACTED]` wherever they would appear in a log line, at every level, as is the MD5 hash of the password sent to COROS and the value of any field named `token`, `accessToken`, `password` or `pwd`.
 
 ## Health
 

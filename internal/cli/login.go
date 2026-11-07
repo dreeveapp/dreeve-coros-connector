@@ -13,6 +13,7 @@ import (
 func login(ctx context.Context, getenv Env, a *app) error {
 	email, password := getenv("COROS_EMAIL"), getenv("COROS_PASSWORD")
 	a.secrets.Add(password)
+	a.secrets.Add(coros.PasswordHash(password))
 	if email == "" || password == "" {
 		return errors.New("set COROS_EMAIL and COROS_PASSWORD")
 	}
@@ -42,7 +43,7 @@ func login(ctx context.Context, getenv Env, a *app) error {
 	}
 
 	tok := storedToken{Token: result.Token, Host: host, RegionID: result.RegionID, IssuedAt: time.Now().UTC().Truncate(time.Second)}
-	if err := saveToken(p.tokens, a.umask, tok); err != nil {
+	if err := saveToken(p.tokens, a.umask.apply(0o600), tok); err != nil {
 		return err
 	}
 	a.log.Info("logged in to COROS, token saved", "region", result.RegionID, "host", host, "file", filepath.Join(p.tokens, tokenFileName))

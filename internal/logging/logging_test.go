@@ -35,6 +35,7 @@ func logEverywhere(log *slog.Logger) {
 	log.With("session", token).WithGroup("cycle").Info("derived", "note", password)
 	log.Info("named", "token", "not-a-registered-value", "password", "also-unregistered", "accessToken", "abc")
 	log.Info("value", "any", struct{ Token string }{token})
+	log.Info("bytes", "body", []byte(`{"pwd":"`+password+`"}`))
 }
 
 func TestNoRegisteredSecretOrSecretNamedAttributeReachesTheOutput(t *testing.T) {
@@ -49,7 +50,7 @@ func TestNoRegisteredSecretOrSecretNamedAttributeReachesTheOutput(t *testing.T) 
 					t.Errorf("output contains %q:\n%s", secret, out.String())
 				}
 			}
-			if got := strings.Count(out.String(), "[REDACTED]"); got < 9 {
+			if got := strings.Count(out.String(), "[REDACTED]"); got < 11 {
 				t.Errorf("expected every secret to be replaced by [REDACTED], found %d:\n%s", got, out.String())
 			}
 		})
@@ -65,16 +66,20 @@ func TestJSONOutputIsOneObjectPerLine(t *testing.T) {
 	scanner := bufio.NewScanner(out)
 	for scanner.Scan() {
 		lines++
-		var record map[string]any
+		var record struct {
+			Time  *string `json:"time"`
+			Level *string `json:"level"`
+			Msg   *string `json:"msg"`
+		}
 		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 			t.Fatalf("line %d is not a JSON object: %v\n%s", lines, err, scanner.Text())
 		}
-		if record["msg"] == nil || record["level"] == nil || record["time"] == nil {
+		if record.Time == nil || record.Level == nil || record.Msg == nil {
 			t.Errorf("line %d lacks time, level or msg: %s", lines, scanner.Text())
 		}
 	}
-	if lines != 6 {
-		t.Fatalf("expected 6 lines, got %d", lines)
+	if lines != 7 {
+		t.Fatalf("expected 7 lines, got %d", lines)
 	}
 }
 

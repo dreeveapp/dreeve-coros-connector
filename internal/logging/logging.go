@@ -134,6 +134,8 @@ func (h *redactor) attr(a slog.Attr) slog.Attr {
 		switch v := a.Value.Any().(type) {
 		case error:
 			return slog.String(a.Key, h.secrets.redact(v.Error()))
+		case []byte:
+			return slog.String(a.Key, h.secrets.redact(string(v)))
 		case fmt.Stringer:
 			return slog.String(a.Key, h.secrets.redact(v.String()))
 		default:

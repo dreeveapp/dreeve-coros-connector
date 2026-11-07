@@ -102,16 +102,20 @@ func (c *Client) HomeHost(regionID int) (string, error) {
 	return host, nil
 }
 
+func PasswordHash(password string) string {
+	sum := md5.Sum([]byte(password))
+	return hex.EncodeToString(sum[:])
+}
+
 func (c *Client) Login(ctx context.Context, email, password string) (LoginResult, error) {
 	host, err := c.HomeHost(loginRegion)
 	if err != nil {
 		return LoginResult{}, err
 	}
-	sum := md5.Sum([]byte(password))
 	body, err := json.Marshal(map[string]any{
 		"account":     email,
 		"accountType": 2,
-		"pwd":         hex.EncodeToString(sum[:]),
+		"pwd":         PasswordHash(password),
 	})
 	if err != nil {
 		return LoginResult{}, err

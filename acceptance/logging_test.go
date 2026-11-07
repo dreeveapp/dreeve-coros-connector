@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
 
@@ -26,19 +27,23 @@ func (w *world) savedToken() string {
 	return tok.Token
 }
 
-func jsonRecords(t *testing.T, what, output string) []map[string]any {
+type logRecord struct {
+	Time  *string `json:"time"`
+	Level *string `json:"level"`
+	Msg   *string `json:"msg"`
+}
+
+func jsonRecords(t *testing.T, what, output string) []logRecord {
 	t.Helper()
-	var records []map[string]any
+	var records []logRecord
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		var record map[string]any
+		var record logRecord
 		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 			t.Fatalf("%s: line is not a JSON object: %v\n%s", what, err, scanner.Text())
 		}
-		for _, field := range []string{"time", "level", "msg"} {
-			if _, ok := record[field]; !ok {
-				t.Errorf("%s: line lacks %q: %s", what, field, scanner.Text())
-			}
+		if record.Time == nil || record.Level == nil || record.Msg == nil {
+			t.Errorf("%s: line lacks time, level or msg: %s", what, scanner.Text())
 		}
 		records = append(records, record)
 	}
@@ -77,7 +82,7 @@ func TestJSONLogsAreOneObjectPerLineAndNeverContainSecrets(t *testing.T) {
 			t.Errorf("%s wrote to stdout instead of the log on stderr:\n%s", what, r.stdout)
 		}
 		lines += len(jsonRecords(t, what, r.stderr))
-		for _, secret := range []string{firstToken, secondToken, password, wrongPassword} {
+		for _, secret := range []string{firstToken, secondToken, password, wrongPassword, coros.PasswordHash(password), coros.PasswordHash(wrongPassword)} {
 			if strings.Contains(r.stdout+r.stderr, secret) {
 				t.Errorf("%s logged a secret %q:\n%s", what, secret, r.stderr)
 			}
