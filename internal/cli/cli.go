@@ -15,7 +15,8 @@ import (
 const usage = `usage: dreeve-coros-connector <command>
 
 commands:
-  login       log in to COROS with COROS_EMAIL and COROS_PASSWORD and save the token
+  login       log in to COROS and save the token; prompts in a terminal, otherwise
+              reads COROS_EMAIL and COROS_PASSWORD or their _FILE variants
   sync-once   deliver new COROS activities as FIT files to the watch folder, then exit
   run         sync every POLL_INTERVAL seconds and serve /healthz and /status on HTTP_ADDR
   healthcheck exit 0 when the running daemon reports healthy on /healthz
@@ -31,9 +32,10 @@ type app struct {
 	log     *slog.Logger
 	secrets *logging.Secrets
 	umask   umask
+	prompt  *prompter
 }
 
-func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, getenv Env, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
@@ -60,6 +62,7 @@ func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Write
 		a.log.Error(args[0]+" failed", "error", err)
 		return 1
 	}
+	a.prompt = newPrompter(stdin, stderr)
 	if err := run(ctx, getenv, a); err != nil {
 		a.log.Error(args[0]+" failed", "error", err)
 		return 1

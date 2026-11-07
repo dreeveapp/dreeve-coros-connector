@@ -36,7 +36,7 @@ func newFake(t *testing.T, regionID, homeRegionID int) (*fakecoros.Server, *coro
 
 func login(t *testing.T, fake *fakecoros.Server, client *coros.Client) *coros.Session {
 	t.Helper()
-	result, err := client.Login(context.Background(), email, password)
+	result, err := client.Login(context.Background(), coros.LoginRegion, email, password)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -49,7 +49,7 @@ func login(t *testing.T, fake *fakecoros.Server, client *coros.Client) *coros.Se
 
 func TestLoginReturnsTokenAndRegion(t *testing.T) {
 	fake, client := newFake(t, 3, 3)
-	result, err := client.Login(context.Background(), email, password)
+	result, err := client.Login(context.Background(), coros.LoginRegion, email, password)
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestLoginReturnsTokenAndRegion(t *testing.T) {
 
 func TestLoginWithWrongPasswordIsBadCredentials(t *testing.T) {
 	_, client := newFake(t, 1, 1)
-	_, err := client.Login(context.Background(), email, "wrong")
+	_, err := client.Login(context.Background(), coros.LoginRegion, email, "wrong")
 	if !errors.Is(err, coros.ErrBadCredentials) {
 		t.Fatalf("expected ErrBadCredentials, got %v", err)
 	}
@@ -221,5 +221,31 @@ func TestThrottlingIsReportedAsHTTP429(t *testing.T) {
 	var httpErr *coros.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusTooManyRequests {
 		t.Fatalf("expected an HTTPError with status 429, got %v", err)
+	}
+}
+
+func TestLoginPostsToTheGivenRegion(t *testing.T) {
+	fake, client := newFake(t, 2, 2)
+	result, err := client.Login(context.Background(), 2, email, password)
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if result.RegionID != 2 {
+		t.Fatalf("RegionID = %d, want 2", result.RegionID)
+	}
+	if regions := fake.RegionsOf(fakecoros.Login); len(regions) != 1 || regions[0] != 2 {
+		t.Fatalf("login requests went to regions %v, want [2]", fake.RegionsOf(fakecoros.Login))
+	}
+}
+
+func TestRegionNamesMapToRegionIDs(t *testing.T) {
+	for name, want := range map[string]int{"us": 1, "cn": 2, "eu": 3, "EU": 3} {
+		got, err := coros.ParseRegion(name)
+		if err != nil || got != want {
+			t.Errorf("ParseRegion(%q) = %d, %v, want %d", name, got, err, want)
+		}
+	}
+	if _, err := coros.ParseRegion("asia"); err == nil {
+		t.Error("ParseRegion(\"asia\") accepted an unknown region")
 	}
 }

@@ -27,7 +27,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 - Write no comments in code, including test files. Names and tests carry the meaning; rationale goes in the PR description.
 - Work test-first: write a failing test through a public surface, make it pass, refactor.
 - Pin every dependency to an exact version: Go modules, npm devDependencies, container images by digest, GitHub Actions by full semver tag locked in `.github/workflows/actions.lock` (see the supply-chain rule).
-- Never log or persist the COROS password. Only `login` reads it. Log through the app's `*slog.Logger` only, never `fmt` to stdout or stderr (the usage text is the one exception), and register any new secret with `Secrets.Add` as soon as it is read.
+- Never log or persist the COROS password. Only `login` reads it. Log through the app's `*slog.Logger` only, never `fmt` to stdout or stderr (the usage text and the `login` prompts on stderr are the only exceptions), and register any new secret with `Secrets.Add` as soon as it is read.
 - Write every file the connector keeps (FIT files, the ledger, the token) only through `internal/atomicfile` with a mode passed through the app's `umask`, so `UMASK` applies to it. The boot write probe, created and removed at once, is the only exception.
 - Every COROS login revokes every other token on the account. Never add code or tests that log in against the real API outside the live contract check.
 - Agent guidance lives in `.rulesync/`. Edit it there, run `npm ci --ignore-scripts && npx rulesync generate`, and commit the generated files.
