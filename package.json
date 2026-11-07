@@ -1,0 +1,12 @@
+{
+  "name": "dreeve-coros-connector-tooling",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "rulesync:generate": "rulesync generate",
+    "rulesync:check": "rulesync generate --check && rulesync doctor --strict"
+  },
+  "devDependencies": {
+    "rulesync": "43.7.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "apiCode": "41C2B95C",
+  "data": {
+    "accessToken": "test-access-token",
+    "countryCode": "US",
+    "email": "runner@example.com",
+    "nickname": "Runner",
+    "regionId": 1,
+    "temperatureUnit": 0,
+    "twoFactorRequired": false,
+    "unit": 0,
+    "userId": "900000000000000001"
+  },
+  "extend": {
+    "grayHeaders": {}
+  },
+  "message": "OK",
+  "result": "0000"
+}
