@@ -16,11 +16,17 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 )
 
 const fixtureFileHost = "http://coros-files.test/"
+
+type TB interface {
+	Helper()
+	Fatalf(format string, args ...any)
+	Errorf(format string, args ...any)
+	Cleanup(func())
+}
 
 type Config struct {
 	FixturesDir    string
@@ -42,7 +48,7 @@ type Activity struct {
 }
 
 type Server struct {
-	t        testing.TB
+	t        TB
 	cfg      Config
 	srv      *httptest.Server
 	base     string
@@ -55,7 +61,7 @@ type Server struct {
 	fileGets   map[string]int
 }
 
-func New(t testing.TB, cfg Config) *Server {
+func New(t TB, cfg Config) *Server {
 	t.Helper()
 	if cfg.HomeRegionID == 0 {
 		cfg.HomeRegionID = cfg.RegionID
@@ -92,7 +98,7 @@ func New(t testing.TB, cfg Config) *Server {
 	return s
 }
 
-func loadFixture(t testing.TB, dir, name string) map[string]any {
+func loadFixture(t TB, dir, name string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, name+".json"))
 	if err != nil {

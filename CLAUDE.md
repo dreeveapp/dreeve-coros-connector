@@ -10,6 +10,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 - `internal/ledger`: `/state/ledger.json` contract
 - `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`
 - `acceptance`: black-box tests that build and drive the binary
+- `tools/fakecoros`: dev-only fake COROS server for running the connector by hand (see the `run-app` skill); never shipped in the image
 
 ## Rules
 
