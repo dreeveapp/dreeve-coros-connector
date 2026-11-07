@@ -51,6 +51,7 @@ func main() {
 	homeRegion := flag.Int("home-region", 0, "region whose host accepts the token, defaults to -region")
 	activities := flag.Int("activities", 3, "activities to serve, one per day starting yesterday")
 	withoutFile := flag.Int("without-file", 0, "how many of the oldest activities have no FIT file")
+	throttle := flag.Int("throttle", 0, "how many of the first activity download requests answer HTTP 429")
 	flag.Parse()
 
 	r := &runner{}
@@ -73,6 +74,10 @@ func main() {
 			Start:     time.Now().UTC().AddDate(0, 0, -(i + 1)),
 			NoFile:    i >= *activities-*withoutFile,
 		})
+	}
+
+	for range *throttle {
+		fake.InjectFaults(fakecoros.Download, fakecoros.Throttle)
 	}
 
 	fmt.Printf("COROS_API_HOSTS=%s\nCOROS_EMAIL=%s\nCOROS_PASSWORD=%s\n", fake.HostsEnv(), demoEmail, demoPassword)

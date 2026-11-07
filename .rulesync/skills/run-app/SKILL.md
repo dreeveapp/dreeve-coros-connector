@@ -42,6 +42,7 @@ Flags:
 | --- | --- | --- |
 | `-activities` | `3` | activities served, one per day starting yesterday |
 | `-without-file` | `0` | how many of the oldest activities get the synthetic "no file" response |
+| `-throttle` | `0` | how many of the first activity download requests answer HTTP 429 |
 | `-region` | `1` | region id reported at login |
 | `-home-region` | `-region` | region whose host accepts the token; set it different from `-region` to reproduce a wrong-region login |
 | `-addr` | `127.0.0.1:18080` | listen address |
@@ -68,7 +69,7 @@ curl -s http://127.0.0.1:18081/status
 HTTP_ADDR=127.0.0.1:18081 "$S/dreeve-coros-connector" healthcheck; echo "exit=$?"
 ```
 
-Run whatever sequence shows the change: a second `sync-once` to show nothing is delivered twice, a wrong `COROS_PASSWORD` for the bad-credentials error, `-home-region 3` for the wrong-region error, a corrupted `ledger.json` for the corrupt-ledger error.
+Run whatever sequence shows the change: a second `sync-once` to show nothing is delivered twice, a wrong `COROS_PASSWORD` for the bad-credentials error, `-home-region 3` for the wrong-region error, a corrupted `ledger.json` for the corrupt-ledger error. For rate limiting, `MAX_DOWNLOADS_PER_CYCLE` and `DOWNLOAD_DELAY_SECONDS` show the cap and pacing, `-throttle 1` the backoff, and `-without-file` with a low `MAX_ATTEMPTS` the retries.
 
 ## 4. Container run
 
