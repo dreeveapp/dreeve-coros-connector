@@ -56,6 +56,7 @@ func (s *Secrets) Add(value string) {
 	defer s.mu.Unlock()
 	if !slices.Contains(s.values, value) {
 		s.values = append(s.values, value)
+		slices.SortFunc(s.values, func(a, b string) int { return len(b) - len(a) })
 	}
 }
 

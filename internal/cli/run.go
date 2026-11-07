@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -66,7 +67,7 @@ func runDaemon(ctx context.Context, getenv Env, a *app) error {
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	server := &http.Server{Handler: d.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	server := &http.Server{Handler: d.Handler(), ReadHeaderTimeout: 5 * time.Second, ErrorLog: slog.NewLogLogger(a.log.Handler(), slog.LevelError)}
 	served := make(chan error, 1)
 	go func() {
 		served <- server.Serve(listener)

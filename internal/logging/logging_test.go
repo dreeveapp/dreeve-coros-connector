@@ -131,3 +131,17 @@ func TestParseFormat(t *testing.T) {
 		t.Error("ParseFormat(logfmt) succeeded")
 	}
 }
+
+func TestASecretContainingAnotherIsRedactedWhole(t *testing.T) {
+	var out bytes.Buffer
+	secrets := &logging.Secrets{}
+	secrets.Add("horse")
+	secrets.Add("tok-horse-91")
+	log := logging.New(&out, slog.LevelInfo, logging.Text, secrets)
+
+	log.Info("token tok-horse-91 loaded")
+
+	if strings.Contains(out.String(), "tok-") || strings.Contains(out.String(), "-91") {
+		t.Fatalf("the longer secret was only partly redacted:\n%s", out.String())
+	}
+}

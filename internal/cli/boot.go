@@ -20,15 +20,18 @@ func (s *syncer) boot() error {
 }
 
 func (s *syncer) removeStaleParts() error {
-	stale, err := filepath.Glob(filepath.Join(s.paths.watch, ".coros_*.fit.part"))
+	entries, err := os.ReadDir(s.paths.watch)
 	if err != nil {
 		return err
 	}
-	for _, path := range stale {
-		if err := os.Remove(path); err != nil {
+	for _, e := range entries {
+		if stale, _ := filepath.Match(".coros_*.fit.part", e.Name()); !stale || e.IsDir() {
+			continue
+		}
+		if err := os.Remove(filepath.Join(s.paths.watch, e.Name())); err != nil {
 			return fmt.Errorf("remove stale partial file: %w", err)
 		}
-		s.log.Info("removed a partial file left by an interrupted delivery", "file", filepath.Base(path))
+		s.log.Info("removed a partial file left by an interrupted delivery", "file", e.Name())
 	}
 	return nil
 }

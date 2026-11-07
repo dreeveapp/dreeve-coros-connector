@@ -77,3 +77,23 @@ func TestStalePartFilesFromACrashAreRemovedAtBoot(t *testing.T) {
 		})
 	}
 }
+
+func TestStalePartFilesAreRemovedWhenTheWatchPathHasGlobCharacters(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.watch = filepath.Join(t.TempDir(), "watch[1]")
+	if err := os.Mkdir(w.watch, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w.env["WATCH_DIR"] = w.watch
+	w.mustRun("login")
+	stale := ".coros_" + labelID(0) + ".fit.part"
+	if err := os.WriteFile(filepath.Join(w.watch, stale), []byte("half written"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	w.mustRun("sync-once")
+
+	if _, ok := w.watchFiles()[stale]; ok {
+		t.Fatalf("stale %s is still in %s", stale, w.watch)
+	}
+}
