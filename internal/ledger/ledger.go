@@ -52,6 +52,14 @@ func (l *Ledger) Record(labelID string, e Entry) {
 	l.Activities[labelID] = e
 }
 
+func (l *Ledger) Counts() map[Status]int {
+	counts := map[Status]int{Delivered: 0, NoFile: 0}
+	for _, e := range l.Activities {
+		counts[e.Status]++
+	}
+	return counts
+}
+
 func Parse(data []byte) (*Ledger, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()

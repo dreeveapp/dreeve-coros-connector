@@ -59,6 +59,15 @@ ls -l "$S/watch" "$S/tokens"
 cat "$S/state/ledger.json"
 ```
 
+For the daemon, start `run` in the background with a short interval, then query its endpoints:
+
+```bash
+POLL_INTERVAL_TESTING=2s HTTP_ADDR=127.0.0.1:18081 "$S/dreeve-coros-connector" run > "$S/run.log" 2>&1 &
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18081/healthz
+curl -s http://127.0.0.1:18081/status
+HTTP_ADDR=127.0.0.1:18081 "$S/dreeve-coros-connector" healthcheck; echo "exit=$?"
+```
+
 Run whatever sequence shows the change: a second `sync-once` to show nothing is delivered twice, a wrong `COROS_PASSWORD` for the bad-credentials error, `-home-region 3` for the wrong-region error, a corrupted `ledger.json` for the corrupt-ledger error.
 
 ## 4. Container run

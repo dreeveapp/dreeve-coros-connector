@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/xballoy/dreeve-coros-connector/internal/atomicfile"
+	"github.com/xballoy/dreeve-coros-connector/internal/daemon"
 )
 
 const tokenFileName = "token.json"
@@ -34,14 +35,14 @@ func loadToken(dir string) (storedToken, error) {
 	path := filepath.Join(dir, tokenFileName)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return storedToken{}, fmt.Errorf("not logged in: no COROS token in %s, run `login` first", dir)
+		return storedToken{}, &tokenError{state: daemon.TokenMissing, err: fmt.Errorf("not logged in: no COROS token in %s, run `login` first", dir)}
 	}
 	if err != nil {
-		return storedToken{}, fmt.Errorf("read token %s: %w", path, err)
+		return storedToken{}, &fatalError{fmt.Errorf("read token %s: %w", path, err)}
 	}
 	var tok storedToken
 	if err := json.Unmarshal(data, &tok); err != nil || tok.Token == "" || tok.Host == "" {
-		return storedToken{}, fmt.Errorf("token file %s is unreadable, run `login` again", path)
+		return storedToken{}, &tokenError{state: daemon.TokenUnreadable, err: fmt.Errorf("token file %s is unreadable, run `login` again", path)}
 	}
 	return tok, nil
 }

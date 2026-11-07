@@ -26,6 +26,10 @@ linters:
         text: "G401|G501"
         linters:
           - gosec
+      - path: internal/daemon/daemon\.go
+        text: "G404"
+        linters:
+          - gosec
 formatters:
   enable:
     - gofmt

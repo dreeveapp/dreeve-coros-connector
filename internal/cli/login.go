@@ -11,7 +11,7 @@ import (
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 )
 
-func login(ctx context.Context, getenv Env, stdout io.Writer) error {
+func login(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
 	email, password := getenv("COROS_EMAIL"), getenv("COROS_PASSWORD")
 	if email == "" || password == "" {
 		return errors.New("set COROS_EMAIL and COROS_PASSWORD")

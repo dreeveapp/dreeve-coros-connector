@@ -137,3 +137,14 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+func TestCountsListsEveryStatusIncludingEmptyOnes(t *testing.T) {
+	l := ledger.New()
+	l.Record("900000000000000002", ledger.Entry{Status: ledger.Delivered})
+	l.Record("900000000000000003", ledger.Entry{Status: ledger.Delivered})
+
+	want := map[ledger.Status]int{ledger.Delivered: 2, ledger.NoFile: 0}
+	if got := l.Counts(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Counts() = %v, want %v", got, want)
+	}
+}

@@ -77,16 +77,28 @@ func newWorld(t *testing.T, regionID, homeRegionID int) *world {
 	return w
 }
 
-func (w *world) run(args ...string) result {
-	w.t.Helper()
+func (w *world) command(args ...string) *exec.Cmd {
 	cmd := exec.Command(binary, args...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
 	for k, v := range w.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}
+	return cmd
+}
+
+func (w *world) run(args ...string) result {
+	w.t.Helper()
+	cmd := w.command(args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		w.t.Fatalf("start %v: %v", args, err)
+	}
+	timeout := time.AfterFunc(30*time.Second, func() { _ = cmd.Process.Kill() })
+	err := cmd.Wait()
+	if !timeout.Stop() {
+		w.t.Fatalf("%v did not exit within 30s\nstdout: %s\nstderr: %s", args, stdout.String(), stderr.String())
+	}
 	code := 0
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
