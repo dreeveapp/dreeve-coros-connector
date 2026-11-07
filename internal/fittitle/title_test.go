@@ -13,6 +13,7 @@ import (
 
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/kit/hash/crc16"
 	"github.com/muktihari/fit/profile/factory"
 	"github.com/muktihari/fit/profile/typedef"
 	"github.com/muktihari/fit/profile/untyped/fieldnum"
@@ -103,6 +104,46 @@ func TestWriteAddsTheTitleToTheLastChainedFileAndLeavesTheOthersUntouched(t *tes
 	}
 }
 
+func TestWriteHandlesEveryHeaderLayout(t *testing.T) {
+	for name, raw := range headerLayouts(t, encode(t, nil, activity())) {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeStrict(raw); err != nil {
+				t.Fatalf("input does not decode with checksums enforced: %v", err)
+			}
+
+			files := decode(t, write(t, raw, "Tempo"))
+
+			if got := workoutNames(files); len(got) != 1 || got[0] != "Tempo" {
+				t.Fatalf("workout names = %q, want [\"Tempo\"]", got)
+			}
+		})
+	}
+}
+
+func headerLayouts(t testing.TB, fourteen []byte) map[string][]byte {
+	t.Helper()
+	if fourteen[0] != 14 {
+		t.Fatalf("encoder wrote a %d-byte header, want 14", fourteen[0])
+	}
+	data := fourteen[14 : len(fourteen)-2]
+
+	twelve := append([]byte{12}, fourteen[1:12]...)
+	twelve = append(twelve, data...)
+	twelve = binary.LittleEndian.AppendUint16(twelve, crc(twelve))
+
+	zero := append(bytes.Clone(fourteen[:12]), 0, 0)
+	zero = append(zero, data...)
+	zero = binary.LittleEndian.AppendUint16(zero, crc(data))
+
+	return map[string][]byte{"14-byte": fourteen, "12-byte": twelve, "14-byte with no header CRC": zero}
+}
+
+func crc(b []byte) uint16 {
+	h := crc16.New()
+	_, _ = h.Write(b)
+	return h.Sum16()
+}
+
 func TestWriteRefusesAFileThatAlreadyHasAWorkout(t *testing.T) {
 	withWorkout := activity()
 	withWorkout.Messages = append(withWorkout.Messages, workout("Planned intervals"))
@@ -138,6 +179,16 @@ func TestWriteTruncatesALongTitleOnACharacterBoundary(t *testing.T) {
 	}
 	if got := encodedTitle(titled); got != want {
 		t.Fatalf("encoded wkt_name = %q, want %q", got, want)
+	}
+}
+
+func TestWriteTrimsSpacesAroundTheTitleBeforeTruncating(t *testing.T) {
+	raw := encode(t, nil, activity())
+
+	files := decode(t, write(t, raw, strings.Repeat(" ", fittitle.MaxTitleBytes)+"Recovery jog "))
+
+	if got := workoutNames(files); len(got) != 1 || got[0] != "Recovery jog" {
+		t.Fatalf("workout names = %q, want [\"Recovery jog\"]", got)
 	}
 }
 
@@ -180,9 +231,19 @@ func FuzzWrite(f *testing.F) {
 		f.Add(encode(f, opts, activity()), "Morning Run")
 	}
 	f.Add(encode(f, nil, activity(), activity()), "a"+strings.Repeat("é", 200))
+	for _, raw := range headerLayouts(f, encode(f, nil, activity())) {
+		f.Add(raw, "Tempo")
+	}
 	f.Fuzz(func(t *testing.T, input []byte, title string) {
 		titled, err := fittitle.Write(input, title)
+		inputFiles, decodeErr := decodeStrict(input)
+		if decodeErr != nil {
+			return
+		}
 		if err != nil {
+			if titleable(inputFiles, input, title) {
+				t.Fatalf("Write refused a strictly decodable file without a workout: %v", err)
+			}
 			return
 		}
 		if len(titled) <= len(input) {
@@ -213,10 +274,30 @@ func FuzzWrite(f *testing.F) {
 		if !utf8.ValidString(names[0]) || len(names[0]) > fittitle.MaxTitleBytes || names[0] == "" {
 			t.Fatalf("wkt_name %q is not a valid title", names[0])
 		}
-		if clean := strings.ReplaceAll(strings.ToValidUTF8(title, ""), "\x00", ""); !strings.HasPrefix(clean, names[0]) {
+		if clean := strings.TrimSpace(strings.ReplaceAll(strings.ToValidUTF8(title, ""), "\x00", "")); !strings.HasPrefix(clean, names[0]) {
 			t.Fatalf("wkt_name %q is not a prefix of the title %q", names[0], title)
 		}
 	})
+}
+
+func titleable(files []*proto.FIT, input []byte, title string) bool {
+	if len(workoutNames(files)) > 0 || !sizesCoverEveryByte(input) {
+		return false
+	}
+	return strings.TrimSpace(strings.ReplaceAll(strings.ToValidUTF8(title, ""), "\x00", "")) != ""
+}
+
+func sizesCoverEveryByte(b []byte) bool {
+	for start := 0; start < len(b); {
+		if len(b)-start < 12 {
+			return false
+		}
+		start += int(b[start]) + int(binary.LittleEndian.Uint32(b[start+4:])) + 2
+		if start > len(b) {
+			return false
+		}
+	}
+	return true
 }
 
 func encodedTitle(titled []byte) string {
@@ -273,12 +354,7 @@ func workout(name string) proto.Message {
 	}}
 }
 
-type tb interface {
-	Helper()
-	Fatalf(format string, args ...any)
-}
-
-func encode(t tb, opts []encoder.Option, files ...*proto.FIT) []byte {
+func encode(t testing.TB, opts []encoder.Option, files ...*proto.FIT) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	enc := encoder.New(&buf, append([]encoder.Option{encoder.WithProtocolVersion(proto.V2)}, opts...)...)

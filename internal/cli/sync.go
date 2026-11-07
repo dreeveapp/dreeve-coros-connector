@@ -305,7 +305,7 @@ func (s *syncer) withTitle(data []byte, a coros.Activity) []byte {
 	case err == nil:
 		return titled
 	case errors.Is(err, fittitle.ErrHasWorkout), errors.Is(err, fittitle.ErrEmptyTitle):
-		s.log.Info("title not written, delivering the file as served", "labelId", a.LabelID, "name", a.Name, "reason", err.Error())
+		s.log.Info("title not written, delivering the file as served", "labelId", a.LabelID, "name", a.Name, "error", err.Error())
 	default:
 		s.log.Warn("title not written, delivering the file as served", "labelId", a.LabelID, "name", a.Name, "error", err.Error())
 	}

@@ -81,7 +81,7 @@ To retry a `failed` or `no-file` activity, delete its entry from `ledger.json` w
 
 ## Activity titles
 
-Dreeve names an imported activity after the first `workout` message's `wkt_name` in its FIT file, and COROS files have none. With `WRITE_TITLE=true` (the default), the connector appends one `workout` message holding the COROS activity name, default names such as "Morning Run" included, to each file before delivering it. Names longer than 254 bytes are cut at a character boundary. Every message COROS wrote stays byte for byte as it was; only the header's data size and the checksums change.
+Dreeve names an imported activity after the first `workout` message's `wkt_name` in its FIT file, and COROS files have none. With `WRITE_TITLE=true` (the default), the connector appends one `workout` message holding the COROS activity name, default names such as "Morning Run" included, to each file before delivering it. Spaces around the name are trimmed, and names longer than 254 bytes are cut at a character boundary. Every message COROS wrote stays byte for byte as it was; only the header's data size and the checksums change.
 
 The file is delivered exactly as COROS served it, with the reason logged, when:
 

@@ -9,12 +9,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/muktihari/fit/kit/hash/crc16"
+	"github.com/muktihari/fit/profile/typedef"
+	"github.com/muktihari/fit/profile/untyped/mesgnum"
 )
 
 const (
 	MaxTitleBytes = 254
 
-	workoutMesgNum = 26
 	wktNameField   = 8
 	stringBaseType = 0x07
 )
@@ -32,9 +33,16 @@ type file struct {
 	start, headerSize, end int
 }
 
+func (f file) checksummed() int {
+	if f.headerSize == 14 {
+		return f.start + f.headerSize
+	}
+	return f.start
+}
+
 func Write(fit []byte, title string) ([]byte, error) {
-	name := truncate(sanitize(title))
-	if strings.TrimSpace(name) == "" {
+	name := truncate(strings.TrimSpace(sanitize(title)))
+	if name == "" {
 		return nil, ErrEmptyTitle
 	}
 	files, err := parse(fit)
@@ -46,7 +54,7 @@ func Write(fit []byte, title string) ([]byte, error) {
 	workout := workoutRecords(name)
 	dataSize := int(binary.LittleEndian.Uint32(fit[last.start+4:])) + len(workout)
 	if dataSize < 0 || dataSize > math.MaxUint32 {
-		return nil, fmt.Errorf("%w: no room for the title", ErrTruncated)
+		return nil, fmt.Errorf("%w: no room for the title in the data size", ErrMalformed)
 	}
 	out := make([]byte, 0, len(fit)+len(workout))
 	out = append(out, fit[:last.end]...)
@@ -58,7 +66,7 @@ func Write(fit []byte, title string) ([]byte, error) {
 		binary.LittleEndian.PutUint16(out[last.start+12:], checksum(out[last.start:last.start+12]))
 	}
 	end := last.end + len(workout)
-	binary.LittleEndian.PutUint16(out[end:], checksum(out[last.start:end]))
+	binary.LittleEndian.PutUint16(out[end:], checksum(out[last.checksummed():end]))
 	return out, nil
 }
 
@@ -79,7 +87,7 @@ func truncate(title string) string {
 
 func workoutRecords(name string) []byte {
 	size := min(len(name)+1, math.MaxUint8)
-	records := []byte{0x40, 0, 0, workoutMesgNum, 0, 1, wktNameField, byte(size), stringBaseType, 0x00}
+	records := []byte{0x40, 0, 0, byte(mesgnum.Workout), byte(mesgnum.Workout >> 8), 1, wktNameField, byte(size), stringBaseType, 0x00}
 	records = append(records, name...)
 	return append(records, 0)
 }
@@ -122,17 +130,18 @@ func parseFile(b []byte, start int) (file, error) {
 	if end+2 > len(b) || end < start {
 		return file{}, ErrTruncated
 	}
-	if binary.LittleEndian.Uint16(b[end:]) != checksum(b[start:end]) {
+	f := file{start: start, headerSize: headerSize, end: end}
+	if binary.LittleEndian.Uint16(b[end:]) != checksum(b[f.checksummed():end]) {
 		return file{}, ErrChecksum
 	}
 	if err := walkRecords(b[:end], start+headerSize); err != nil {
 		return file{}, err
 	}
-	return file{start: start, headerSize: headerSize, end: end}, nil
+	return f, nil
 }
 
 type definition struct {
-	mesgNum uint16
+	mesgNum typedef.MesgNum
 	size    int
 }
 
@@ -160,7 +169,7 @@ func walkRecords(b []byte, offset int) error {
 		if d == nil {
 			return fmt.Errorf("%w: data message before its definition at byte %d", ErrMalformed, offset-1)
 		}
-		if d.mesgNum == workoutMesgNum {
+		if d.mesgNum == mesgnum.Workout {
 			return ErrHasWorkout
 		}
 		offset += d.size
@@ -183,7 +192,7 @@ func parseDefinition(b []byte, offset int, developer bool) (*definition, int, er
 	default:
 		return nil, 0, fmt.Errorf("%w: unknown architecture %d", ErrMalformed, b[offset+1])
 	}
-	d := &definition{mesgNum: order.Uint16(b[offset+2:])}
+	d := &definition{mesgNum: typedef.MesgNum(order.Uint16(b[offset+2:]))}
 	count := int(b[offset+4])
 	cursor := offset + 5
 	if cursor+3*count > len(b) {
