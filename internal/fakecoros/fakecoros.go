@@ -50,6 +50,7 @@ type Activity struct {
 type Endpoint string
 
 const (
+	Login    Endpoint = "login"
 	Query    Endpoint = "activity query"
 	Download Endpoint = "activity download"
 	File     Endpoint = "file download"
@@ -66,6 +67,7 @@ const (
 
 type Request struct {
 	Endpoint Endpoint
+	Region   int
 	LabelID  string
 	At       time.Time
 }
@@ -192,10 +194,20 @@ func (s *Server) RequestsTo(e Endpoint, labelID string) int {
 	return n
 }
 
-func (s *Server) receive(e Endpoint, labelID string) Fault {
+func (s *Server) RegionsOf(e Endpoint) []int {
+	var regions []int
+	for _, r := range s.Requests() {
+		if r.Endpoint == e {
+			regions = append(regions, r.Region)
+		}
+	}
+	return regions
+}
+
+func (s *Server) receive(e Endpoint, region int, labelID string) Fault {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.requests = append(s.requests, Request{Endpoint: e, LabelID: labelID, At: time.Now()})
+	s.requests = append(s.requests, Request{Endpoint: e, Region: region, LabelID: labelID, At: time.Now()})
 	queue := s.faults[e]
 	if len(queue) == 0 {
 		return 0
@@ -230,13 +242,15 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case r.Method == http.MethodPost && path == "/account/login":
-		s.serveLogin(w, r)
+		if !s.fail(w, r, s.receive(Login, region, "")) {
+			s.serveLogin(w, r)
+		}
 	case r.Method == http.MethodGet && path == "/activity/query":
-		if !s.fail(w, r, s.receive(Query, "")) {
+		if !s.fail(w, r, s.receive(Query, region, "")) {
 			s.withToken(w, r, region, s.serveQuery)
 		}
 	case r.Method == http.MethodPost && path == "/activity/detail/download":
-		if !s.fail(w, r, s.receive(Download, r.URL.Query().Get("labelId"))) {
+		if !s.fail(w, r, s.receive(Download, region, r.URL.Query().Get("labelId"))) {
 			s.withToken(w, r, region, s.serveDownload)
 		}
 	default:
@@ -387,7 +401,7 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, labelID strin
 		http.Error(w, "file downloads are unauthenticated GETs", http.StatusBadRequest)
 		return
 	}
-	fault := s.receive(File, labelID)
+	fault := s.receive(File, 0, labelID)
 	if fault != Stall && fault != Truncate && s.fail(w, r, fault) {
 		return
 	}

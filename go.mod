@@ -4,7 +4,11 @@ go 1.27.3
 
 tool golang.org/x/vuln/cmd/govulncheck
 
-require github.com/muktihari/fit v0.28.6
+require (
+	github.com/creack/pty v1.1.24
+	github.com/muktihari/fit v0.28.6
+	golang.org/x/term v0.47.0
+)
 
 require (
 	golang.org/x/mod v0.42.0 // indirect
