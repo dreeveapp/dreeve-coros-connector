@@ -76,6 +76,22 @@ jobs:
         env:
           CONTAINER_SMOKE: "1"
 
+  dreeve-oracle:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: go test -count=1 -run TestDreeveOracle -v ./acceptance/
+        env:
+          DREEVE_ORACLE: "1"
+
   rulesync:
     runs-on: ubuntu-26.04
     permissions:
@@ -141,6 +157,7 @@ jobs:
       - lint
       - govulncheck
       - container-smoke
+      - dreeve-oracle
       - rulesync
       - actionlint
       - zizmor

@@ -95,7 +95,7 @@ func TestJSONLogsAreOneObjectPerLineAndNeverContainSecrets(t *testing.T) {
 
 func TestLogLevelHidesLessSevereRecords(t *testing.T) {
 	w := newWorld(t, 1, 1)
-	w.addActivity(labelID(0), 1)
+	w.addActivity(labelID(0), 1, withContent(goldenFIT(t, "coros-outdoor-run.fit")))
 	w.mustRun("login")
 	w.env["LOG_LEVEL"] = "warn"
 

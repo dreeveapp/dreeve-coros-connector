@@ -16,6 +16,7 @@ import (
 	"github.com/xballoy/dreeve-coros-connector/internal/atomicfile"
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 	"github.com/xballoy/dreeve-coros-connector/internal/daemon"
+	"github.com/xballoy/dreeve-coros-connector/internal/fittitle"
 	"github.com/xballoy/dreeve-coros-connector/internal/ledger"
 	"github.com/xballoy/dreeve-coros-connector/internal/logging"
 	"github.com/xballoy/dreeve-coros-connector/internal/throttle"
@@ -24,16 +25,17 @@ import (
 var safeLabelID = regexp.MustCompile(`^[0-9A-Za-z]+$`)
 
 type syncer struct {
-	paths    paths
-	lookback int
-	limits   limits
-	client   *coros.Client
-	zone     *time.Location
-	since    string
-	fileMode os.FileMode
-	dryRun   bool
-	log      *slog.Logger
-	secrets  *logging.Secrets
+	paths      paths
+	lookback   int
+	limits     limits
+	client     *coros.Client
+	zone       *time.Location
+	since      string
+	fileMode   os.FileMode
+	dryRun     bool
+	writeTitle bool
+	log        *slog.Logger
+	secrets    *logging.Secrets
 }
 
 func newSyncer(getenv Env, a *app) (*syncer, error) {
@@ -53,11 +55,15 @@ func newSyncer(getenv Env, a *app) (*syncer, error) {
 	if err != nil {
 		return nil, err
 	}
-	dryRun, err := boolEnv(getenv, "DRY_RUN")
+	dryRun, err := boolEnv(getenv, "DRY_RUN", false)
 	if err != nil {
 		return nil, err
 	}
-	return &syncer{dryRun: dryRun, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
+	writeTitle, err := boolEnv(getenv, "WRITE_TITLE", true)
+	if err != nil {
+		return nil, err
+	}
+	return &syncer{dryRun: dryRun, writeTitle: writeTitle, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
 }
 
 func syncOnce(ctx context.Context, getenv Env, a *app) error {
@@ -171,7 +177,7 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 		if err := th.Pace(ctx); err != nil {
 			return statusCounts(l), err
 		}
-		entry, err := deliver(ctx, s.client, session, s.paths.watch, s.fileMode, a)
+		entry, err := s.deliver(ctx, session, a)
 		th.Downloaded()
 		if err != nil && ctx.Err() != nil {
 			return statusCounts(l), ctx.Err()
@@ -273,21 +279,37 @@ func statusCounts(l *ledger.Ledger) map[string]int {
 	return counts
 }
 
-func deliver(ctx context.Context, client *coros.Client, session *coros.Session, watchDir string, mode os.FileMode, a coros.Activity) (ledger.Entry, error) {
+func (s *syncer) deliver(ctx context.Context, session *coros.Session, a coros.Activity) (ledger.Entry, error) {
 	fileURL, err := session.DownloadURL(ctx, a)
 	if err != nil {
 		return ledger.Entry{}, err
 	}
-	data, err := client.Fetch(ctx, fileURL)
+	data, err := s.client.Fetch(ctx, fileURL)
 	if err != nil {
 		return ledger.Entry{}, fmt.Errorf("download activity %s: %w", a.LabelID, err)
 	}
+	if s.writeTitle {
+		data = s.withTitle(data, a)
+	}
 
 	name := fitName(a.LabelID)
-	if err := atomicfile.Write(watchDir, "."+name+".part", name, mode, bytes.NewReader(data)); err != nil {
+	if err := atomicfile.Write(s.paths.watch, "."+name+".part", name, s.fileMode, bytes.NewReader(data)); err != nil {
 		return ledger.Entry{}, &fatalError{fmt.Errorf("deliver activity %s: %w", a.LabelID, err)}
 	}
 	return ledger.Entry{Status: ledger.Delivered, SportType: a.SportType, Name: a.Name, File: name, At: time.Now().UTC().Format(time.RFC3339)}, nil
+}
+
+func (s *syncer) withTitle(data []byte, a coros.Activity) []byte {
+	titled, err := fittitle.Write(data, a.Name)
+	switch {
+	case err == nil:
+		return titled
+	case errors.Is(err, fittitle.ErrHasWorkout), errors.Is(err, fittitle.ErrEmptyTitle):
+		s.log.Info("title not written, delivering the file as served", "labelId", a.LabelID, "name", a.Name, "reason", err.Error())
+	default:
+		s.log.Warn("title not written, delivering the file as served", "labelId", a.LabelID, "name", a.Name, "error", err.Error())
+	}
+	return data
 }
 
 func windowStart(l *ledger.Ledger, today time.Time, lookback int) (time.Time, error) {

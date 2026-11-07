@@ -79,6 +79,18 @@ To retry a `failed` or `no-file` activity, delete its entry from `ledger.json` w
 
 **Logging in signs out every other COROS session on the account**, including COROS Training Hub and any other connector using that account. The mobile app is not affected. When the saved token is revoked, `sync-once` fails with an explicit message: run `login` again.
 
+## Activity titles
+
+Dreeve names an imported activity after the first `workout` message's `wkt_name` in its FIT file, and COROS files have none. With `WRITE_TITLE=true` (the default), the connector appends one `workout` message holding the COROS activity name, default names such as "Morning Run" included, to each file before delivering it. Names longer than 254 bytes are cut at a character boundary. Every message COROS wrote stays byte for byte as it was; only the header's data size and the checksums change.
+
+The file is delivered exactly as COROS served it, with the reason logged, when:
+
+- it already has a `workout` message, which Dreeve would read first anyway;
+- the activity has no name;
+- it is not an intact FIT file (bad checksum, truncated, or not FIT at all). This one is a warning, since Dreeve will import it under a generic title.
+
+With `WRITE_TITLE=false`, every file is delivered exactly as COROS served it.
+
 ## Startup checks
 
 Before contacting COROS, `sync-once` and `run`:
@@ -133,6 +145,7 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | `MAX_ATTEMPTS` | `5` | `sync-once`, `run` | Failed downloads of one activity before it is recorded as `failed` or `no-file` |
 | `TZ` | `UTC` | `sync-once`, `run` | Optional IANA time zone, e.g. `Europe/Paris`, used to decide what "today" is: it sets the day `SINCE=-<days>d` counts back from, how a `YYYY-MM-DD` `SINCE` is read, and the days listed from COROS. Unset means UTC; an unknown zone is an error. |
 | `UMASK` | `022` | all | Octal permission bits removed from every file written: FIT files and the ledger start from `0666`, the token from `0600`. For example `002` makes FIT files `0664` and `027` makes them `0640`. A value that is not octal or above `777` is an error. |
+| `WRITE_TITLE` | `true` | `sync-once`, `run` | `true` writes the COROS activity name into each delivered FIT file (see [Activity titles](#activity-titles)); `false` delivers files exactly as COROS served them |
 | `DRY_RUN` | `false` | `sync-once`, `run` | `true` lists what would be delivered and writes nothing (see [Dry run](#dry-run)) |
 | `LOG_LEVEL` | `info` | all | `debug`, `info`, `warn` or `error` |
 | `LOG_FORMAT` | `text` | all | `text` or `json` (one object per line) |
@@ -175,7 +188,9 @@ See [`CLAUDE.md`](CLAUDE.md) for how to run each test level. Agent guidance is g
 
 Releases follow [`RELEASING.md`](RELEASING.md).
 
-CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions and npm tooling up to date.
+CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions, npm tooling and the pinned Dreeve commit up to date.
+
+CI also builds Dreeve's own `fit-tool` from the commit pinned in `testdata/dreeve/fit-tool.json` and checks that it reads the title and every original message from delivered files.
 
 ## License
 

@@ -14,6 +14,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 - `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`, injects faults (429, 5xx, truncated or stalled bodies) and logs every request it receives
 - `acceptance`: black-box tests that build and drive the binary
 - `tools/fakecoros`: dev-only fake COROS server for running the connector by hand (see the `run-app` skill); never shipped in the image
+- `internal/fittitle`: appends a `workout` message holding the COROS title to a downloaded FIT file without re-encoding it (`WRITE_TITLE`)
 - `internal/fitscrub`, `tools/fitscrub`: dev-only FIT anonymiser for the golden files in `testdata/fit/` (see the fixtures rule); never shipped in the image
 
 ## Rules
@@ -32,7 +33,8 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 | --- | --- |
 | Unit, contract and acceptance | `go test ./...` |
 | Race | `go test -race ./...` |
-| Fuzz | `go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/ledger` |
+| Fuzz | `go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/ledger`, `go test -run '^$' -fuzz FuzzWrite -fuzztime 30s ./internal/fittitle` |
+| Dreeve oracle | `DREEVE_ORACLE=1 go test -count=1 -run TestDreeveOracle ./acceptance` |
 | Container smoke | `CONTAINER_SMOKE=1 go test -count=1 -run TestContainerSmoke ./acceptance` |
 | Container smoke on a pushed image | `CONTAINER_SMOKE=1 CONTAINER_SMOKE_IMAGE=ghcr.io/...@sha256:... go test -count=1 -run TestContainerSmoke ./acceptance` |
 | Live contract (local only, never CI) | `COROS_EMAIL=... COROS_PASSWORD=... go test -tags live -count=1 -run TestLiveContract ./internal/coros` |
