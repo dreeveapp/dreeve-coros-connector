@@ -17,7 +17,7 @@ One container serves one COROS account. Only completed activities with a FIT fil
 
 A sync never hammers COROS, and a failed download is never lost:
 
-- Each cycle downloads at most `MAX_DOWNLOADS_PER_CYCLE` activities, oldest first, and waits at least `DOWNLOAD_DELAY_SECONDS` between two downloads. A large backfill is delivered over several cycles.
+- Each cycle downloads at most `MAX_DOWNLOADS_PER_CYCLE` activities, oldest first, and waits at least `DOWNLOAD_DELAY_SECONDS` after one download finishes before starting the next. A large backfill is delivered over several cycles.
 - When COROS answers HTTP 429, the cycle stops at once and the connector backs off: 15 minutes after the first 429, doubling after each consecutive one, never more than `MAX_BACKOFF_SECONDS`. No request reaches COROS until the backoff elapses, including after a restart, because the backoff is stored in the ledger. The first cycle that completes clears it.
 - A download that fails with a network error, a timeout, an HTTP error or a truncated file is recorded as `pending` and retried on the next cycle. After `MAX_ATTEMPTS` failures it is recorded as `failed` and no longer retried.
 - A download that COROS answers with a result code other than `0000` is logged with that code and retried the same way. After `MAX_ATTEMPTS` it is recorded as `no-file` with the code.
@@ -57,8 +57,8 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | `SINCE` | `-30d` | `sync-once`, `run` | How far back the first sync goes: `-<days>d` or `YYYY-MM-DD`. Resolved once on the first run and stored in the ledger; later changes are ignored. |
 | `LOOKBACK_DAYS` | `7` | `sync-once`, `run` | How many days each run lists again, to catch activities that sync to COROS late. A run also reaches back to the last completed sync, or to the oldest activity still waiting for a retry, if that is older. |
 | `MAX_DOWNLOADS_PER_CYCLE` | `25` | `sync-once`, `run` | Most activities downloaded in one cycle; the rest wait for the next cycle |
-| `DOWNLOAD_DELAY_SECONDS` | `2` | `sync-once`, `run` | Least number of seconds between two downloads, at least `1` |
-| `MAX_BACKOFF_SECONDS` | `21600` | `sync-once`, `run` | Longest wait after consecutive HTTP 429 responses |
+| `DOWNLOAD_DELAY_SECONDS` | `2` | `sync-once`, `run` | Least number of seconds between the end of one download and the start of the next, at least `1` |
+| `MAX_BACKOFF_SECONDS` | `21600` | `sync-once`, `run` | Longest wait after consecutive HTTP 429 responses, from `1` to `604800` (one week) |
 | `MAX_ATTEMPTS` | `5` | `sync-once`, `run` | Failed downloads of one activity before it is recorded as `failed` or `no-file` |
 | `TZ` | `UTC` | `sync-once`, `run` | Optional IANA time zone, e.g. `Europe/Paris`, used to decide what "today" is when listing activities. Unset means UTC; an unknown zone is an error. |
 | `WATCH_DIR`, `STATE_DIR`, `TOKENS_DIR` | `/watch`, `/state`, `/tokens` | all | Override the volume paths, mainly for running outside a container |

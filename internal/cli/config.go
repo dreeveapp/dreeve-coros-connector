@@ -46,7 +46,10 @@ func newClient(getenv Env) (*coros.Client, error) {
 	return client, nil
 }
 
-const baseBackoff = 15 * time.Minute
+const (
+	baseBackoff       = 15 * time.Minute
+	maxBackoffSeconds = 7 * 24 * 3600
+)
 
 type limits struct {
 	maxDownloads int
@@ -67,6 +70,9 @@ func loadLimits(getenv Env) (limits, error) {
 	backoff, err := positiveInt(getenv, "MAX_BACKOFF_SECONDS", 21600)
 	if err != nil {
 		return limits{}, err
+	}
+	if backoff > maxBackoffSeconds {
+		return limits{}, fmt.Errorf("MAX_BACKOFF_SECONDS must be at most %d (one week), got %d", maxBackoffSeconds, backoff)
 	}
 	l.maxBackoff = time.Duration(backoff) * time.Second
 	if l.delay, err = positiveDuration(getenv, "DOWNLOAD_DELAY_TESTING"); err != nil || l.delay > 0 {

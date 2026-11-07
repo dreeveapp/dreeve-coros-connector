@@ -335,3 +335,24 @@ func TestPartFileLeftByAKilledDeliveryIsReplacedByTheNextRun(t *testing.T) {
 		t.Fatalf("expected only the complete file, got %v", keys(files))
 	}
 }
+
+func TestMaxBackoffLongerThanAWeekIsRejected(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.mustRun("login")
+	w.env["MAX_BACKOFF_SECONDS"] = "604801"
+
+	r := w.run("sync-once")
+
+	if r.code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	assertContains(t, r.stderr, "MAX_BACKOFF_SECONDS", "604800")
+}
+
+func TestMaxBackoffOfExactlyAWeekIsAccepted(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.mustRun("login")
+	w.env["MAX_BACKOFF_SECONDS"] = "604800"
+
+	w.mustRun("sync-once")
+}
