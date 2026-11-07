@@ -20,7 +20,7 @@ const (
 	resultOK             = "0000"
 	ResultInvalidToken   = "1019"
 	ResultBadCredentials = "1030"
-	loginRegion          = 1
+	LoginRegion          = 1
 	fitFileType          = "4"
 	defaultPageSize      = 50
 )
@@ -107,8 +107,20 @@ func PasswordHash(password string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (c *Client) Login(ctx context.Context, email, password string) (LoginResult, error) {
-	host, err := c.HomeHost(loginRegion)
+func ParseRegion(name string) (int, error) {
+	switch strings.ToLower(name) {
+	case "us":
+		return 1, nil
+	case "cn":
+		return 2, nil
+	case "eu":
+		return 3, nil
+	}
+	return 0, fmt.Errorf("%w %q, expected us, eu or cn", ErrUnknownRegion, name)
+}
+
+func (c *Client) Login(ctx context.Context, regionID int, email, password string) (LoginResult, error) {
+	host, err := c.HomeHost(regionID)
 	if err != nil {
 		return LoginResult{}, err
 	}

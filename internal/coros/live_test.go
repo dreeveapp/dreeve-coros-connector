@@ -25,11 +25,11 @@ func TestLiveContract(t *testing.T) {
 	ctx := context.Background()
 	client := coros.NewClient(coros.DefaultHosts())
 
-	if _, err := client.Login(ctx, liveEmail, livePassword+"-wrong"); !errors.Is(err, coros.ErrBadCredentials) {
+	if _, err := client.Login(ctx, coros.LoginRegion, liveEmail, livePassword+"-wrong"); !errors.Is(err, coros.ErrBadCredentials) {
 		t.Fatalf("bad credentials: expected ErrBadCredentials, got %v", err)
 	}
 
-	first, err := client.Login(ctx, liveEmail, livePassword)
+	first, err := client.Login(ctx, coros.LoginRegion, liveEmail, livePassword)
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLiveContract(t *testing.T) {
 		t.Fatalf("downloaded file is not a FIT file (%d bytes)", len(file))
 	}
 
-	if _, err := client.Login(ctx, liveEmail, livePassword); err != nil {
+	if _, err := client.Login(ctx, coros.LoginRegion, liveEmail, livePassword); err != nil {
 		t.Fatalf("second login: %v", err)
 	}
 	if err := session.Verify(ctx); !errors.Is(err, coros.ErrInvalidToken) {

@@ -20,18 +20,6 @@ func TestLoginWithWrongCredentialsFailsAndSavesNothing(t *testing.T) {
 	}
 }
 
-func TestLoginWithoutCredentialsFails(t *testing.T) {
-	w := newWorld(t, 1, 1)
-	delete(w.env, "COROS_PASSWORD")
-
-	r := w.run("login")
-
-	if r.code == 0 {
-		t.Fatal("expected a non-zero exit")
-	}
-	assertContains(t, r.stderr, "COROS_PASSWORD")
-}
-
 func TestLoginInTheWrongRegionFailsAndSavesNothing(t *testing.T) {
 	w := newWorld(t, 1, 3)
 

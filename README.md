@@ -8,7 +8,7 @@ One container serves one COROS account. Only completed activities with a FIT fil
 
 | Command | What it does |
 | --- | --- |
-| `login` | Logs in with `COROS_EMAIL` and `COROS_PASSWORD`, finds the account's home region, verifies the token, and saves it to `/tokens/token.json` (mode `0600`). Nothing is saved if any step fails. |
+| `login` | Logs in to COROS (see [Logging in](#logging-in)), finds the account's home region, verifies the token, and saves it to `/tokens/token.json` (mode `0600`). Nothing is saved if any step fails. |
 | `sync-once` | Checks the volumes (see [Startup checks](#startup-checks)), lists your activities, downloads each new one as `coros_<labelId>.fit` into `/watch`, records it in `/state/ledger.json`, then exits. It never reads your password. It exits non-zero when COROS throttles it or while it is still backing off. |
 | `run` | The image's default. Checks the volumes, runs a sync cycle at startup, then every `POLL_INTERVAL` seconds with a random ±10% jitter, and serves `/healthz` and `/status` on `HTTP_ADDR`. It reads `/tokens/token.json` again on every cycle and never logs in by itself. |
 | `healthcheck` | Exits 0 when `/healthz` on `HTTP_ADDR` answers 200, non-zero otherwise. The image's `HEALTHCHECK` runs it. |
@@ -69,6 +69,8 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | --- | --- | --- | --- |
 | `COROS_EMAIL` | | `login` | COROS account email |
 | `COROS_PASSWORD` | | `login` | COROS account password |
+| `COROS_EMAIL_FILE`, `COROS_PASSWORD_FILE` | | `login` | Path of a file holding the email or password, such as a Docker secret. Trailing line breaks are ignored. Setting a variable and its `_FILE` variant together is an error. |
+| `COROS_REGION` | | `login` | `us`, `eu` or `cn`: log in and verify on that region's host instead of the region COROS reports. Needed when COROS reports a region this connector does not know. |
 | `POLL_INTERVAL` | `3600` | `run` | Seconds between sync cycles, from `900` to `604800` (one week). Each wait is randomised by ±10%. A value outside that range stops `run` at startup. |
 | `HTTP_ADDR` | `:8080` | `run`, `healthcheck` | Address the health server listens on, and that `healthcheck` queries (an empty or wildcard host means `127.0.0.1`) |
 | `SINCE` | `-30d` | `sync-once`, `run` | How far back the first sync goes: `-<days>d` or `YYYY-MM-DD`. Resolved once on the first run and stored in the ledger; later changes are ignored. |
@@ -88,6 +90,33 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | `DOWNLOAD_DELAY_TESTING` | | `sync-once`, `run` | Testing only: a Go duration that replaces `DOWNLOAD_DELAY_SECONDS` and bypasses its minimum |
 | `HTTP_TIMEOUT_TESTING` | `60s` | `sync-once`, `run` | Testing only: a Go duration for the COROS request timeout |
 
+## Logging in
+
+`login` takes the email and the password from, in order:
+
+1. `COROS_EMAIL` or `COROS_EMAIL_FILE`, and `COROS_PASSWORD` or `COROS_PASSWORD_FILE`. A variable and its `_FILE` variant cannot be set together.
+2. A prompt, for whichever is still missing, when standard input is a terminal (`docker compose run -it`). The password is not echoed.
+
+Without a terminal, a missing email or password is an error that lists the variables above. The password is never logged, written to disk or shown.
+
+`login` signs in on the US host, then saves the host of the region COROS reports for the account. If COROS reports a region this connector does not know, or the reported region's host rejects the new token, `login` fails, saves nothing, and asks for `COROS_REGION`. With `COROS_REGION` set, `login` uses that region's host from the start.
+
+With Docker secrets:
+
+```yaml
+services:
+  coros-connector:
+    environment:
+      COROS_EMAIL_FILE: /run/secrets/coros_email
+      COROS_PASSWORD_FILE: /run/secrets/coros_password
+    secrets: [coros_email, coros_password]
+secrets:
+  coros_email:
+    file: ./coros/email.txt
+  coros_password:
+    file: ./coros/password.txt
+```
+
 ## Docker Compose
 
 ```yaml
@@ -106,7 +135,7 @@ services:
 Log in once, then start the daemon:
 
 ```sh
-docker compose run --rm -e COROS_EMAIL=you@example.com -e COROS_PASSWORD='...' coros-connector login
+docker compose run --rm -it coros-connector login
 docker compose up -d
 ```
 
