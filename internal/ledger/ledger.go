@@ -130,7 +130,7 @@ func Load(path string) (*Ledger, error) {
 	return l, nil
 }
 
-func (l *Ledger) Save(path string) error {
+func (l *Ledger) Save(path string, mode fs.FileMode) error {
 	data, err := json.MarshalIndent(l, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode ledger: %w", err)
@@ -139,5 +139,5 @@ func (l *Ledger) Save(path string) error {
 	if dir == "" {
 		dir = "."
 	}
-	return atomicfile.Write(dir, "."+name+".tmp", name, 0o644, bytes.NewReader(append(data, '\n')))
+	return atomicfile.Write(dir, "."+name+".tmp", name, mode, bytes.NewReader(append(data, '\n')))
 }

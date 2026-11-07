@@ -32,7 +32,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 	l.Record("900000000000000006", ledger.Entry{Status: ledger.Failed, SportType: 100, Attempts: 5, Error: "COROS file download returned HTTP 503"})
 	l.Backoff = &ledger.Backoff{Until: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Count: 2}
 
-	if err := l.Save(path); err != nil {
+	if err := l.Save(path, 0o644); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	got, err := ledger.Load(path)
@@ -49,7 +49,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 
 func TestSaveLeavesNoTemporaryFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := ledger.New().Save(filepath.Join(dir, "ledger.json")); err != nil {
+	if err := ledger.New().Save(filepath.Join(dir, "ledger.json"), 0o644); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	entries, err := os.ReadDir(dir)

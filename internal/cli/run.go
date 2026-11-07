@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -35,13 +34,16 @@ func pollInterval(getenv Env) (time.Duration, error) {
 	return time.Duration(n) * time.Second, nil
 }
 
-func runDaemon(ctx context.Context, getenv Env, stdout, stderr io.Writer) error {
+func runDaemon(ctx context.Context, getenv Env, a *app) error {
 	interval, err := pollInterval(getenv)
 	if err != nil {
 		return err
 	}
-	s, err := newSyncer(getenv)
+	s, err := newSyncer(getenv, a)
 	if err != nil {
+		return err
+	}
+	if err := s.boot(); err != nil {
 		return err
 	}
 	var lc net.ListenConfig
@@ -53,10 +55,10 @@ func runDaemon(ctx context.Context, getenv Env, stdout, stderr io.Writer) error 
 	d := daemon.New(daemon.Config{
 		Interval: interval,
 		Cycle: func(ctx context.Context) (daemon.Report, error) {
-			counts, err := s.cycle(ctx, "cycle", stdout)
+			counts, err := s.cycle(ctx, "cycle")
 			report, fatal := reportFor(counts, err)
 			if report.Err != nil && ctx.Err() == nil {
-				_, _ = fmt.Fprintf(stderr, "run: %v\n", report.Err)
+				a.log.Error("cycle failed", "error", report.Err)
 			}
 			return report, fatal
 		},
@@ -70,7 +72,7 @@ func runDaemon(ctx context.Context, getenv Env, stdout, stderr io.Writer) error 
 		served <- server.Serve(listener)
 		cancel()
 	}()
-	_, _ = fmt.Fprintf(stdout, "serving /healthz and /status on %s, syncing every %s\n", listener.Addr(), interval)
+	a.log.Info("serving /healthz and /status", "addr", listener.Addr().String(), "interval", interval.String())
 
 	runErr := d.Run(ctx)
 	shutdownCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
@@ -82,7 +84,7 @@ func runDaemon(ctx context.Context, getenv Env, stdout, stderr io.Writer) error 
 	return runErr
 }
 
-func healthcheck(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
+func healthcheck(ctx context.Context, getenv Env, a *app) error {
 	addr := envOr(getenv, "HTTP_ADDR", defaultHTTPAddr)
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -106,6 +108,6 @@ func healthcheck(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s returned %s", url, resp.Status)
 	}
-	_, _ = fmt.Fprintln(stdout, "healthy")
+	a.log.Info("healthy", "url", url)
 	return nil
 }

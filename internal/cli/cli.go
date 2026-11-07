@@ -4,6 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
+	"strconv"
+
+	"github.com/xballoy/dreeve-coros-connector/internal/logging"
 )
 
 const usage = `usage: dreeve-coros-connector <command>
@@ -17,12 +22,18 @@ commands:
 
 type Env func(string) string
 
+type app struct {
+	log     *slog.Logger
+	secrets *logging.Secrets
+	umask   os.FileMode
+}
+
 func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Writer) int {
 	if len(args) != 1 {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
-	var run func(context.Context, Env, io.Writer, io.Writer) error
+	var run func(context.Context, Env, *app) error
 	switch args[0] {
 	case "login":
 		run = login
@@ -39,9 +50,42 @@ func Run(ctx context.Context, args []string, getenv Env, stdout, stderr io.Write
 		_, _ = fmt.Fprintf(stderr, "unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
-	if err := run(ctx, getenv, stdout, stderr); err != nil {
-		_, _ = fmt.Fprintf(stderr, "%s: %v\n", args[0], err)
+	a, err := newApp(getenv, stderr)
+	if err != nil {
+		a.log.Error(args[0]+" failed", "error", err)
+		return 1
+	}
+	if err := run(ctx, getenv, a); err != nil {
+		a.log.Error(args[0]+" failed", "error", err)
 		return 1
 	}
 	return 0
+}
+
+func newApp(getenv Env, w io.Writer) (*app, error) {
+	secrets := &logging.Secrets{}
+	a := &app{log: logging.New(w, slog.LevelInfo, logging.Text, secrets), secrets: secrets}
+	format, err := logging.ParseFormat(getenv("LOG_FORMAT"))
+	if err != nil {
+		return a, err
+	}
+	a.log = logging.New(w, slog.LevelInfo, format, secrets)
+	level, err := logging.ParseLevel(getenv("LOG_LEVEL"))
+	if err != nil {
+		return a, err
+	}
+	a.log = logging.New(w, level, format, secrets)
+	a.umask, err = parseUmask(getenv("UMASK"))
+	return a, err
+}
+
+func parseUmask(raw string) (os.FileMode, error) {
+	if raw == "" {
+		return 0o022, nil
+	}
+	n, err := strconv.ParseUint(raw, 8, 32)
+	if err != nil || n > 0o777 {
+		return 0, fmt.Errorf("UMASK must be an octal permission mask such as 022, got %q", raw)
+	}
+	return os.FileMode(n), nil
 }

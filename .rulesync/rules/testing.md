@@ -13,7 +13,7 @@ Public surfaces:
 
 - The binary: exit codes, stdout and stderr, environment variables
 - The volumes: files in `/watch`, `/state/ledger.json`, `/tokens/token.json` and their modes
-- Exported APIs of `internal/coros`, `internal/ledger`, `internal/daemon` and `internal/throttle`
+- Exported APIs of `internal/coros`, `internal/ledger`, `internal/daemon`, `internal/throttle` and `internal/logging`
 - The requests the fake COROS receives (`Requests`, `RequestsTo`): request counts and timing are what COROS observes, so they are behaviour
 - The `run` HTTP endpoints: `/healthz` and `/status`
 
@@ -22,6 +22,7 @@ Levels:
 - **Acceptance** (`acceptance/`): `TestMain` builds the binary once. Each test gets a fake COROS server and `t.TempDir()` volumes, runs subcommands, and asserts only on public surfaces. Point the binary at the fake with `COROS_API_HOSTS` and at the volumes with `WATCH_DIR`, `STATE_DIR` and `TOKENS_DIR`. Drive `run` with `world.startDaemon`, which sets `POLL_INTERVAL_TESTING` to a short duration and `HTTP_ADDR` to a free port, and wait on observable outcomes with `eventually`, never fixed sleeps.
 - **Time-controlled** (`internal/daemon`, `internal/throttle`): the schedule, the download delay and the 429 backoff run against a fake `Clock`; tests advance it by the exact duration asked for, so interval, jitter, delay and backoff bounds are asserted without real sleeps.
 - **Fault injection** (`acceptance/`, `internal/coros`): `fakecoros.Server.InjectFaults` queues a 429, a 5xx, a truncated body or a stall for the next requests to an endpoint. Acceptance tests set `DOWNLOAD_DELAY_TESTING` to a short duration by default and `HTTP_TIMEOUT_TESTING` when they need a timeout, and simulate an elapsed backoff by rewriting `backoff.until` in the ledger.
+- **Logs** (`acceptance/`, `internal/logging`): every log line is on stderr. Assert on substrings that survive both formats (field values such as a label id or an error), or set `LOG_FORMAT=json` and parse each line. A scan for secrets in the binary's output cannot fail, because the connector never logs them, so redaction is tested on `internal/logging` with secrets logged on purpose. Simulate a non-writable volume with `chmod 0555` on its temp dir, and skip when running as root.
 - **Race** (`go test -race ./...`): the `run` loop and the HTTP handler share the daemon's status; `internal/daemon` reads `/status` concurrently with running cycles.
 - **Contract** (`internal/coros`): the client runs against `internal/fakecoros`, which builds every response from the recorded fixtures in `testdata/coros/` and rejects requests that do not match the real API's shape. When the fake needs a new behaviour, start from a recorded fixture, never from a hand-written response, unless the file is named `*.synthetic.json`.
 - **Live contract** (`internal/coros/live_test.go`, build tag `live`): run locally with a personal account before merging a change to the client. Never run it in CI.

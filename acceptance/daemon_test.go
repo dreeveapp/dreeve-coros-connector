@@ -29,7 +29,7 @@ type daemonProc struct {
 	code   int
 }
 
-var listening = regexp.MustCompile(`serving /healthz and /status on ([^\s,]+)`)
+var listening = regexp.MustCompile(`serving /healthz and /status.*?\baddr"?[=:]"?([^\s",]+)`)
 
 func (w *world) startDaemon() *daemonProc {
 	w.t.Helper()
@@ -53,8 +53,8 @@ func (w *world) startDaemon() *daemonProc {
 	}
 	addr := make(chan string, 1)
 	var copies sync.WaitGroup
-	copies.Go(func() { d.collect(stdout, &d.stdout, addr) })
-	copies.Go(func() { d.collect(stderr, &d.stderr, nil) })
+	copies.Go(func() { d.collect(stdout, &d.stdout, nil) })
+	copies.Go(func() { d.collect(stderr, &d.stderr, addr) })
 	go func() {
 		copies.Wait()
 		err := d.cmd.Wait()
@@ -78,7 +78,7 @@ func (w *world) startDaemon() *daemonProc {
 	case <-d.exited:
 		w.t.Fatalf("daemon exited %d before serving\nstdout: %s\nstderr: %s", d.code, d.out(), d.errOut())
 	case <-time.After(10 * time.Second):
-		w.t.Fatalf("daemon never reported its address\nstdout: %s", d.out())
+		w.t.Fatalf("daemon never reported its address\nstderr: %s", d.errOut())
 	}
 	w.env["HTTP_ADDR"] = d.addr
 	return d
