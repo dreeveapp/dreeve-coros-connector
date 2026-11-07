@@ -47,6 +47,29 @@ type Activity struct {
 	Content   []byte
 }
 
+type Endpoint string
+
+const (
+	Query    Endpoint = "activity query"
+	Download Endpoint = "activity download"
+	File     Endpoint = "file download"
+)
+
+type Fault int
+
+const (
+	Throttle Fault = iota + 1
+	ServerError
+	Truncate
+	Stall
+)
+
+type Request struct {
+	Endpoint Endpoint
+	LabelID  string
+	At       time.Time
+}
+
 type Server struct {
 	t        TB
 	cfg      Config
@@ -59,6 +82,8 @@ type Server struct {
 	activities map[string]Activity
 	tokenSeq   int
 	fileGets   map[string]int
+	faults     map[Endpoint][]Fault
+	requests   []Request
 }
 
 func New(t TB, cfg Config) *Server {
@@ -73,8 +98,9 @@ func New(t TB, cfg Config) *Server {
 		tokens:     map[string]bool{},
 		activities: map[string]Activity{},
 		fileGets:   map[string]int{},
+		faults:     map[Endpoint][]Fault{},
 	}
-	for _, name := range []string{"login", "login-bad-credentials", "query-token-revoked", "query-wrong-region", "query-activities-page-1", "download-fit", "download-no-file.synthetic"} {
+	for _, name := range []string{"login", "login-bad-credentials", "query-token-revoked", "query-wrong-region", "query-activities-page-1", "download-fit", "download-no-file.synthetic", "http-error.synthetic"} {
 		s.fixtures[name] = loadFixture(t, cfg.FixturesDir, name)
 	}
 
@@ -144,6 +170,54 @@ func (s *Server) FileDownloads(labelID string) int {
 	return s.fileGets[labelID]
 }
 
+func (s *Server) InjectFaults(e Endpoint, faults ...Fault) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.faults[e] = append(s.faults[e], faults...)
+}
+
+func (s *Server) Requests() []Request {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.requests)
+}
+
+func (s *Server) RequestsTo(e Endpoint, labelID string) int {
+	n := 0
+	for _, r := range s.Requests() {
+		if r.Endpoint == e && r.LabelID == labelID {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Server) receive(e Endpoint, labelID string) Fault {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requests = append(s.requests, Request{Endpoint: e, LabelID: labelID, At: time.Now()})
+	queue := s.faults[e]
+	if len(queue) == 0 {
+		return 0
+	}
+	s.faults[e] = queue[1:]
+	return queue[0]
+}
+
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, fault Fault) bool {
+	switch fault {
+	case Throttle:
+		s.writeJSONStatus(w, http.StatusTooManyRequests, s.fixtures["http-error.synthetic"])
+	case ServerError:
+		s.writeJSONStatus(w, http.StatusServiceUnavailable, s.fixtures["http-error.synthetic"])
+	case Stall:
+		<-r.Context().Done()
+	default:
+		return false
+	}
+	return true
+}
+
 func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if name, ok := strings.CutPrefix(r.URL.Path, "/files/"); ok {
 		s.serveFile(w, r, strings.TrimSuffix(name, ".fit"))
@@ -158,9 +232,13 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && path == "/account/login":
 		s.serveLogin(w, r)
 	case r.Method == http.MethodGet && path == "/activity/query":
-		s.withToken(w, r, region, s.serveQuery)
+		if !s.fail(w, r, s.receive(Query, "")) {
+			s.withToken(w, r, region, s.serveQuery)
+		}
 	case r.Method == http.MethodPost && path == "/activity/detail/download":
-		s.withToken(w, r, region, s.serveDownload)
+		if !s.fail(w, r, s.receive(Download, r.URL.Query().Get("labelId"))) {
+			s.withToken(w, r, region, s.serveDownload)
+		}
 	default:
 		http.Error(w, "unexpected request "+r.Method+" "+path, http.StatusNotFound)
 	}
@@ -309,6 +387,10 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, labelID strin
 		http.Error(w, "file downloads are unauthenticated GETs", http.StatusBadRequest)
 		return
 	}
+	fault := s.receive(File, labelID)
+	if fault != Stall && fault != Truncate && s.fail(w, r, fault) {
+		return
+	}
 	s.mu.Lock()
 	a, ok := s.activities[labelID]
 	if ok {
@@ -320,11 +402,25 @@ func (s *Server) serveFile(w http.ResponseWriter, r *http.Request, labelID strin
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
+	if fault == Truncate || fault == Stall {
+		w.Header().Set("Content-Length", strconv.Itoa(len(a.Content)))
+		_, _ = w.Write(a.Content[:len(a.Content)/2])
+		if fault == Stall {
+			_ = http.NewResponseController(w).Flush()
+			<-r.Context().Done()
+		}
+		return
+	}
 	_, _ = w.Write(a.Content)
 }
 
 func (s *Server) writeJSON(w http.ResponseWriter, v any) {
+	s.writeJSONStatus(w, http.StatusOK, v)
+}
+
+func (s *Server) writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		s.t.Errorf("fakecoros: encode response: %v", err)
 	}

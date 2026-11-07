@@ -66,13 +66,14 @@ func newWorld(t *testing.T, regionID, homeRegionID int) *world {
 	})
 	w := &world{t: t, fake: fake, watch: t.TempDir(), state: t.TempDir(), tokens: t.TempDir()}
 	w.env = map[string]string{
-		"COROS_API_HOSTS": fake.HostsEnv(),
-		"COROS_EMAIL":     email,
-		"COROS_PASSWORD":  password,
-		"WATCH_DIR":       w.watch,
-		"STATE_DIR":       w.state,
-		"TOKENS_DIR":      w.tokens,
-		"TZ":              "UTC",
+		"COROS_API_HOSTS":        fake.HostsEnv(),
+		"COROS_EMAIL":            email,
+		"COROS_PASSWORD":         password,
+		"WATCH_DIR":              w.watch,
+		"STATE_DIR":              w.state,
+		"TOKENS_DIR":             w.tokens,
+		"TZ":                     "UTC",
+		"DOWNLOAD_DELAY_TESTING": "10ms",
 	}
 	return w
 }
@@ -162,12 +163,18 @@ func (w *world) clearWatch() {
 }
 
 type ledgerDoc struct {
-	Version    int    `json:"version"`
-	Since      string `json:"since"`
+	Version int    `json:"version"`
+	Since   string `json:"since"`
+	Backoff *struct {
+		Until time.Time `json:"until"`
+		Count int       `json:"count"`
+	} `json:"backoff"`
 	Activities map[string]struct {
 		Status     string `json:"status"`
 		File       string `json:"file"`
 		ResultCode string `json:"resultCode"`
+		Attempts   int    `json:"attempts"`
+		Error      string `json:"error"`
 	} `json:"activities"`
 }
 

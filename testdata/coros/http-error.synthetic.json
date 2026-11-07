@@ -1,0 +1,3 @@
+{
+  "message": "Synthetic: COROS throttling has only been observed as HTTP 429 and server errors have not been observed; neither body has been captured"
+}

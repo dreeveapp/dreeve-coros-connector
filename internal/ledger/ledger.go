@@ -21,7 +21,18 @@ type Status string
 const (
 	Delivered Status = "delivered"
 	NoFile    Status = "no-file"
+	Pending   Status = "pending"
+	Failed    Status = "failed"
 )
+
+func (s Status) Settled() bool {
+	return s == Delivered || s == NoFile || s == Failed
+}
+
+type Backoff struct {
+	Until time.Time `json:"until"`
+	Count int       `json:"count"`
+}
 
 type Entry struct {
 	Status     Status `json:"status"`
@@ -29,6 +40,8 @@ type Entry struct {
 	Name       string `json:"name,omitempty"`
 	File       string `json:"file,omitempty"`
 	ResultCode string `json:"resultCode,omitempty"`
+	Attempts   int    `json:"attempts,omitempty"`
+	Error      string `json:"error,omitempty"`
 	At         string `json:"at,omitempty"`
 }
 
@@ -36,6 +49,7 @@ type Ledger struct {
 	Version       int              `json:"version"`
 	Since         string           `json:"since"`
 	CompleteUntil string           `json:"completeUntil,omitempty"`
+	Backoff       *Backoff         `json:"backoff,omitempty"`
 	Activities    map[string]Entry `json:"activities"`
 }
 
@@ -53,7 +67,7 @@ func (l *Ledger) Record(labelID string, e Entry) {
 }
 
 func (l *Ledger) Counts() map[Status]int {
-	counts := map[Status]int{Delivered: 0, NoFile: 0}
+	counts := map[Status]int{Delivered: 0, NoFile: 0, Pending: 0, Failed: 0}
 	for _, e := range l.Activities {
 		counts[e.Status]++
 	}
@@ -82,12 +96,18 @@ func Parse(data []byte) (*Ledger, error) {
 			return nil, fmt.Errorf("invalid %s %q: %w", field, value, err)
 		}
 	}
+	if b := l.Backoff; b != nil {
+		if b.Count < 1 || b.Until.IsZero() {
+			return nil, errors.New("backoff needs a positive count and an until time")
+		}
+		b.Until = b.Until.UTC()
+	}
 	if l.Activities == nil {
 		return nil, errors.New("ledger has no activities object")
 	}
 	for id, e := range l.Activities {
 		switch e.Status {
-		case Delivered, NoFile:
+		case Delivered, NoFile, Pending, Failed:
 		default:
 			return nil, fmt.Errorf("activity %s has unknown status %q", id, e.Status)
 		}

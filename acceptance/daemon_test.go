@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
 
 type daemonProc struct {
@@ -403,4 +405,30 @@ func TestRunStopsOnAnInvalidSinceForANewLedger(t *testing.T) {
 		t.Fatal("expected a non-zero exit")
 	}
 	assertContains(t, r.stderr, "SINCE")
+}
+
+func TestRunStaysHealthyAndSendsNothingWhileBackingOffAfterA429(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.addActivity("900000000000000002", 1)
+	w.mustRun("login")
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.Throttle)
+	d := w.startDaemon()
+
+	eventually(t, "the throttled cycle in /status", func() bool {
+		s := d.status()
+		return s.LastCycle != nil && strings.Contains(s.LastCycle.Error, "429")
+	})
+	throttledAt := d.status().LastCycle.StartedAt
+	sent := len(w.fake.Requests())
+	eventually(t, "a cycle while backing off", func() bool { return d.status().LastCycle.StartedAt.After(throttledAt) })
+
+	if s := d.status(); !s.Healthy || !strings.Contains(s.LastCycle.Error, "backing off until") {
+		t.Fatalf("status while backing off = %+v", s)
+	}
+	if d.healthz() != http.StatusOK {
+		t.Fatal("/healthz is not 200 while backing off")
+	}
+	if n := len(w.fake.Requests()); n != sent {
+		t.Fatalf("%d requests reached COROS while backing off", n-sent)
+	}
 }

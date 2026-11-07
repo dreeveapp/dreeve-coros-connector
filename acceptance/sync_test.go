@@ -171,8 +171,8 @@ func TestUnexpectedDownloadResultIsReportedAndRetriedOnTheNextRun(t *testing.T) 
 	if files := w.watchFiles(); len(files) != 0 {
 		t.Fatalf("expected nothing delivered, got %v", keys(files))
 	}
-	if _, ok := w.ledger().Activities["900000000000000002"]; ok {
-		t.Fatal("activity with an unexpected download result was recorded")
+	if e := w.ledger().Activities["900000000000000002"]; e.Status != "pending" || e.Attempts != 1 || e.ResultCode != "9999" {
+		t.Fatalf("activity with an unexpected download result recorded as %+v, want pending after 1 attempt with result 9999", e)
 	}
 
 	available := w.addActivity("900000000000000002", 1)
