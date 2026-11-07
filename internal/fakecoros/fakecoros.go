@@ -194,6 +194,16 @@ func (s *Server) RequestsTo(e Endpoint, labelID string) int {
 	return n
 }
 
+func (s *Server) RegionsOf(e Endpoint) []int {
+	var regions []int
+	for _, r := range s.Requests() {
+		if r.Endpoint == e {
+			regions = append(regions, r.Region)
+		}
+	}
+	return regions
+}
+
 func (s *Server) receive(e Endpoint, region int, labelID string) Fault {
 	s.mu.Lock()
 	defer s.mu.Unlock()

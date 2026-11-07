@@ -39,13 +39,7 @@ func (w *world) savedHost() string {
 	return tok.Host
 }
 
-func (w *world) loginRegions() []int {
-	var regions []int
-	for _, r := range w.requestsTo(fakecoros.Login) {
-		regions = append(regions, r.Region)
-	}
-	return regions
-}
+func (w *world) loginRegions() []int { return w.fake.RegionsOf(fakecoros.Login) }
 
 func (w *world) assertNothingSaved() {
 	w.t.Helper()
@@ -222,4 +216,18 @@ func TestInvalidCorosRegionFailsBeforeLoggingIn(t *testing.T) {
 	if regions := w.loginRegions(); len(regions) != 0 {
 		t.Fatalf("logged in despite an invalid COROS_REGION: %v", regions)
 	}
+}
+
+func TestRejectedCredentialsWithCorosRegionMentionTheRegion(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.env["COROS_REGION"] = "eu"
+	w.env["COROS_PASSWORD"] = "wrong"
+
+	r := w.run("login")
+
+	if r.code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	assertContains(t, r.stderr, "email or password", "COROS_REGION=eu")
+	w.assertNothingSaved()
 }

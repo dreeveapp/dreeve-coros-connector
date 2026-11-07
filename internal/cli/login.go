@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 )
 
 func login(ctx context.Context, getenv Env, a *app) error {
-	override, err := regionOverride(getenv)
+	region, err := chooseRegion(getenv)
 	if err != nil {
 		return err
 	}
@@ -25,35 +26,22 @@ func login(ctx context.Context, getenv Env, a *app) error {
 	}
 	p := loadPaths(getenv)
 
-	loginRegion := coros.LoginRegion
-	if override != 0 {
-		loginRegion = override
-	}
-	result, err := client.Login(ctx, loginRegion, email.value, password.value)
+	result, err := client.Login(ctx, region.loginRegion(), email.value, password.value)
 	if errors.Is(err, coros.ErrBadCredentials) {
-		return fmt.Errorf("COROS rejected the email or password (result %s), check %s and %s", coros.ResultBadCredentials, email.source, password.source)
+		return region.badCredentials(email, password)
 	}
 	if err != nil {
 		return err
 	}
 	a.secrets.Add(result.Token)
-	regionID := result.RegionID
-	if override != 0 {
-		regionID = override
-	}
+	regionID := region.home(result.RegionID)
 	host, err := client.HomeHost(regionID)
 	if err != nil {
-		if override != 0 {
-			return fmt.Errorf("COROS_REGION=%s: %w; nothing was saved", getenv("COROS_REGION"), err)
-		}
-		return fmt.Errorf("COROS reported region %d, which this connector does not know: set COROS_REGION to us, eu or cn; nothing was saved", result.RegionID)
+		return region.unknownHost(result.RegionID, err)
 	}
 	if err := client.Session(host, result.Token).Verify(ctx); err != nil {
-		if errors.Is(err, coros.ErrInvalidToken) && override != 0 {
-			return fmt.Errorf("%s rejected the new token (result %s): COROS_REGION=%s is not the account's region; nothing was saved", host, coros.ResultInvalidToken, getenv("COROS_REGION"))
-		}
 		if errors.Is(err, coros.ErrInvalidToken) {
-			return fmt.Errorf("COROS reported region %d but %s rejected the new token (result %s): the account lives in another region, set COROS_REGION to it; nothing was saved", result.RegionID, host, coros.ResultInvalidToken)
+			return region.tokenRejected(result.RegionID, host)
 		}
 		return fmt.Errorf("verify token on %s: %w; nothing was saved", host, err)
 	}
@@ -67,56 +55,57 @@ func login(ctx context.Context, getenv Env, a *app) error {
 	return nil
 }
 
-func regionOverride(getenv Env) (int, error) {
+type regionChoice struct {
+	name string
+	id   int
+}
+
+func chooseRegion(getenv Env) (regionChoice, error) {
 	name := getenv("COROS_REGION")
 	if name == "" {
-		return 0, nil
+		return regionChoice{}, nil
 	}
 	id, err := coros.ParseRegion(name)
 	if err != nil {
-		return 0, fmt.Errorf("COROS_REGION: %w", err)
+		return regionChoice{}, fmt.Errorf("COROS_REGION: %w", err)
 	}
-	return id, nil
+	return regionChoice{name: name, id: id}, nil
 }
 
-func credentials(ctx context.Context, getenv Env, a *app) (email, password credential, err error) {
-	if email, err = credentialFromEnv(getenv, "COROS_EMAIL"); err != nil {
-		return email, password, err
+func (r regionChoice) forced() bool { return r.name != "" }
+
+func (r regionChoice) loginRegion() int {
+	if r.forced() {
+		return r.id
 	}
-	password, err = credentialFromEnv(getenv, "COROS_PASSWORD")
-	a.addPassword(password.value)
-	if err != nil {
-		return email, password, err
-	}
-	if a.prompt == nil {
-		var missing []string
-		if email.value == "" {
-			missing = append(missing, "COROS_EMAIL")
-		}
-		if password.value == "" {
-			missing = append(missing, "COROS_PASSWORD")
-		}
-		if len(missing) > 0 {
-			return email, password, missingCredentials(missing...)
-		}
-		return email, password, nil
-	}
-	if email.value == "" {
-		if email, err = a.prompt.ask(ctx, "Email", false); err != nil {
-			return email, password, err
-		}
-	}
-	if password.value == "" {
-		password, err = a.prompt.ask(ctx, "Password", true)
-		a.addPassword(password.value)
-	}
-	return email, password, err
+	return coros.LoginRegion
 }
 
-func (a *app) addPassword(password string) {
-	if password == "" {
-		return
+func (r regionChoice) home(reported int) int {
+	if r.forced() {
+		return r.id
 	}
-	a.secrets.Add(password)
-	a.secrets.Add(coros.PasswordHash(password))
+	return reported
+}
+
+func (r regionChoice) badCredentials(email, password credential) error {
+	err := fmt.Errorf("COROS rejected the email or password (result %s), check %s and %s", coros.ResultBadCredentials, email.source, password.source)
+	if r.forced() {
+		return fmt.Errorf("%w, and that COROS_REGION=%s is the account's region", err, r.name)
+	}
+	return err
+}
+
+func (r regionChoice) unknownHost(reported int, err error) error {
+	if r.forced() {
+		return fmt.Errorf("COROS_REGION=%s: %w; nothing was saved", r.name, err)
+	}
+	return fmt.Errorf("COROS reported region %d, which this connector does not know: set COROS_REGION to one of %s; nothing was saved", reported, strings.Join(coros.RegionNames(), ", "))
+}
+
+func (r regionChoice) tokenRejected(reported int, host string) error {
+	if r.forced() {
+		return fmt.Errorf("%s rejected the new token (result %s): COROS_REGION=%s is not the account's region; nothing was saved", host, coros.ResultInvalidToken, r.name)
+	}
+	return fmt.Errorf("COROS reported region %d but %s rejected the new token (result %s): the account lives in another region, set COROS_REGION to it; nothing was saved", reported, host, coros.ResultInvalidToken)
 }

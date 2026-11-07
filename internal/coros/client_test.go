@@ -233,14 +233,8 @@ func TestLoginPostsToTheGivenRegion(t *testing.T) {
 	if result.RegionID != 2 {
 		t.Fatalf("RegionID = %d, want 2", result.RegionID)
 	}
-	var regions []int
-	for _, r := range fake.Requests() {
-		if r.Endpoint == fakecoros.Login {
-			regions = append(regions, r.Region)
-		}
-	}
-	if len(regions) != 1 || regions[0] != 2 {
-		t.Fatalf("login requests went to regions %v, want [2]", regions)
+	if regions := fake.RegionsOf(fakecoros.Login); len(regions) != 1 || regions[0] != 2 {
+		t.Fatalf("login requests went to regions %v, want [2]", fake.RegionsOf(fakecoros.Login))
 	}
 }
 

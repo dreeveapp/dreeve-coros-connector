@@ -52,12 +52,32 @@ func (e *HTTPError) Error() string {
 
 type Hosts map[int]string
 
+type region struct {
+	id   int
+	name string
+	host string
+}
+
+var regions = []region{
+	{id: 1, name: "us", host: "https://teamapi.coros.com"},
+	{id: 2, name: "cn", host: "https://teamcnapi.coros.com"},
+	{id: 3, name: "eu", host: "https://teameuapi.coros.com"},
+}
+
 func DefaultHosts() Hosts {
-	return Hosts{
-		1: "https://teamapi.coros.com",
-		2: "https://teamcnapi.coros.com",
-		3: "https://teameuapi.coros.com",
+	hosts := Hosts{}
+	for _, r := range regions {
+		hosts[r.id] = r.host
 	}
+	return hosts
+}
+
+func RegionNames() []string {
+	names := make([]string, 0, len(regions))
+	for _, r := range regions {
+		names = append(names, r.name)
+	}
+	return names
 }
 
 func ParseHosts(s string) (Hosts, error) {
@@ -108,15 +128,12 @@ func PasswordHash(password string) string {
 }
 
 func ParseRegion(name string) (int, error) {
-	switch strings.ToLower(name) {
-	case "us":
-		return 1, nil
-	case "cn":
-		return 2, nil
-	case "eu":
-		return 3, nil
+	for _, r := range regions {
+		if strings.EqualFold(r.name, name) {
+			return r.id, nil
+		}
 	}
-	return 0, fmt.Errorf("%w %q, expected us, eu or cn", ErrUnknownRegion, name)
+	return 0, fmt.Errorf("%w %q, expected one of %s", ErrUnknownRegion, name, strings.Join(RegionNames(), ", "))
 }
 
 func (c *Client) Login(ctx context.Context, regionID int, email, password string) (LoginResult, error) {

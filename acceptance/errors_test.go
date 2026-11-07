@@ -15,9 +15,7 @@ func TestLoginWithWrongCredentialsFailsAndSavesNothing(t *testing.T) {
 		t.Fatal("expected a non-zero exit")
 	}
 	assertContains(t, r.stderr, "email or password", "COROS_EMAIL", "COROS_PASSWORD")
-	if files := w.tokenFiles(); len(files) != 0 {
-		t.Fatalf("token persisted after failed login: %v", files)
-	}
+	w.assertNothingSaved()
 }
 
 func TestLoginInTheWrongRegionFailsAndSavesNothing(t *testing.T) {
@@ -29,9 +27,7 @@ func TestLoginInTheWrongRegionFailsAndSavesNothing(t *testing.T) {
 		t.Fatal("expected a non-zero exit")
 	}
 	assertContains(t, r.stderr, "region 1", "rejected")
-	if files := w.tokenFiles(); len(files) != 0 {
-		t.Fatalf("token persisted after wrong-region login: %v", files)
-	}
+	w.assertNothingSaved()
 }
 
 func TestSyncOnceWithRevokedTokenFailsAndAsksForLogin(t *testing.T) {

@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -75,13 +76,7 @@ func (term *terminal) screen() string {
 
 func (term *terminal) expect(text string) {
 	term.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !strings.Contains(term.screen(), text) {
-		if time.Now().After(deadline) {
-			term.t.Fatalf("terminal never showed %q, got:\n%s", text, term.screen())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	eventually(term.t, fmt.Sprintf("terminal to show %q", text), func() bool { return strings.Contains(term.screen(), text) })
 }
 
 func (term *terminal) send(keys string) {
