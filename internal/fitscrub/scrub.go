@@ -102,6 +102,9 @@ func translation(b []byte, values []value, origin Origin) (uint32, uint32) {
 	var shiftLat, shiftLong uint32
 	foundLat, foundLong := false, false
 	for _, v := range values {
+		if v.kind != latitude && v.kind != longitude {
+			continue
+		}
 		position := v.order.Uint32(b[v.offset:])
 		if position == invalidSemicircle {
 			continue

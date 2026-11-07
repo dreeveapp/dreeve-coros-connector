@@ -110,6 +110,27 @@ func TestScrubClearsTheUserProfile(t *testing.T) {
 	}
 }
 
+func TestScrubClearsAUserProfileThatEndsTheFile(t *testing.T) {
+	field := factory.CreateField
+	raw := encode(t, nil, &proto.FIT{Messages: []proto.Message{
+		{Num: mesgnum.FileId, Fields: []proto.Field{
+			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileSettings.Byte()),
+			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
+		}},
+		{Num: mesgnum.UserProfile, Fields: []proto.Field{
+			field(mesgnum.UserProfile, fieldnum.UserProfileAge).WithValue(uint8(41)),
+		}},
+	}})
+
+	for _, m := range messages(decode(t, scrub(t, raw))) {
+		for _, f := range m.Fields {
+			if m.Num == mesgnum.UserProfile && f.Value.Valid(f.BaseType) {
+				t.Errorf("user_profile %s = %v, want no value", f.Name, f.Value.Any())
+			}
+		}
+	}
+}
+
 func TestScrubKeepsEveryOtherFieldAndTheFileSize(t *testing.T) {
 	for name, opts := range encodings {
 		t.Run(name, func(t *testing.T) {
