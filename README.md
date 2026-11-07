@@ -99,7 +99,7 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 
 Without a terminal, a missing email or password is an error that lists the variables above. The password is never logged, written to disk or shown.
 
-`login` signs in on the US host, then saves the host of the region COROS reports for the account. If COROS reports a region this connector does not know, or the reported region's host rejects the new token, `login` fails, saves nothing, and asks for `COROS_REGION`. With `COROS_REGION` set, `login` uses that region's host from the start.
+`login` signs in on the US host, then saves the host of the region COROS reports for the account. If COROS reports a region this connector does not know, or the reported region's host rejects the new token, `login` fails, saves nothing, and asks for `COROS_REGION`. Any failure after COROS accepts the email and password says so, because that login has already signed out every other session of the account. With `COROS_REGION` set, `login` uses that region's host from the start.
 
 With Docker secrets:
 

@@ -168,7 +168,7 @@ func TestLoginWithAnUnknownRegionAsksForCorosRegionAndSavesNothing(t *testing.T)
 	if r.code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	assertContains(t, r.stderr, "region 4", "COROS_REGION")
+	assertContains(t, r.stderr, "region 4", "COROS_REGION", "signed out every other COROS session")
 	w.assertNothingSaved()
 }
 
@@ -199,7 +199,7 @@ func TestCorosRegionThatIsNotTheAccountsRegionFailsAndSavesNothing(t *testing.T)
 	if r.code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	assertContains(t, r.stderr, "COROS_REGION", "rejected")
+	assertContains(t, r.stderr, "COROS_REGION", "rejected", "signed out every other COROS session")
 	w.assertNothingSaved()
 }
 

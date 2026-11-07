@@ -34,6 +34,16 @@ func login(ctx context.Context, getenv Env, a *app) error {
 		return err
 	}
 	a.secrets.Add(result.Token)
+	if err := keepToken(ctx, client, region, result, p, a); err != nil {
+		return fmt.Errorf("%w; %s", err, signedOutNotice)
+	}
+	a.log.Info(signedOutNotice)
+	return nil
+}
+
+const signedOutNotice = "this login signed out every other COROS session of the account, including Training Hub"
+
+func keepToken(ctx context.Context, client *coros.Client, region regionChoice, result coros.LoginResult, p paths, a *app) error {
 	regionID := region.home(result.RegionID)
 	host, err := client.HomeHost(regionID)
 	if err != nil {
@@ -51,7 +61,6 @@ func login(ctx context.Context, getenv Env, a *app) error {
 		return err
 	}
 	a.log.Info("logged in to COROS, token saved", "region", regionID, "host", host, "file", filepath.Join(p.tokens, tokenFileName))
-	a.log.Info("this login signed out every other COROS session of the account, including Training Hub")
 	return nil
 }
 

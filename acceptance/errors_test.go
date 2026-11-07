@@ -26,7 +26,7 @@ func TestLoginInTheWrongRegionFailsAndSavesNothing(t *testing.T) {
 	if r.code == 0 {
 		t.Fatal("expected a non-zero exit")
 	}
-	assertContains(t, r.stderr, "region 1", "rejected")
+	assertContains(t, r.stderr, "region 1", "rejected", "signed out every other COROS session")
 	w.assertNothingSaved()
 }
 
