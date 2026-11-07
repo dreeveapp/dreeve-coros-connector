@@ -1,0 +1,50 @@
+{
+  "login-bad-credentials": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "login": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-verify": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-wrong-region": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-activities-page-1": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-activities-page-2": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-activities-past-last-page": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "download-fit": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "file-download": {
+    "status": 200,
+    "contentType": "application/octet-stream"
+  },
+  "login-again": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-token-revoked": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  },
+  "query-after-relogin": {
+    "status": 200,
+    "contentType": "application/json;charset=UTF-8"
+  }
+}
