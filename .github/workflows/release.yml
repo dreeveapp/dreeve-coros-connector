@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
 
 permissions: {}
 
@@ -37,6 +37,7 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
         with:
           images: ${{ env.IMAGE }}
+          tags: type=semver,pattern={{version}}
       - id: build
         uses: docker/build-push-action@v7.4.0
         with:
@@ -76,8 +77,29 @@ jobs:
           CONTAINER_SMOKE: "1"
           CONTAINER_SMOKE_IMAGE: ${{ env.IMAGE }}@${{ needs.build.outputs.digest }}
 
+  newest:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    outputs:
+      newest: ${{ steps.compare.outputs.newest }}
+    steps:
+      - id: compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          highest=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")' \
+            | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | sort -V | tail -n 1)
+          if [ "$TAG" = "$highest" ]; then
+            echo "newest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "newest=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
-    needs: [build, smoke]
+    needs: [build, smoke, newest]
     runs-on: ubuntu-26.04
     permissions:
       packages: write
@@ -94,9 +116,11 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ needs.newest.outputs.newest }}
       - name: Tag the smoke-tested image
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
@@ -104,12 +128,18 @@ jobs:
         run: |
           args=()
           while IFS= read -r tag; do
-            [ -n "$tag" ] && args+=(--tag "$tag")
+            if [ -n "$tag" ]; then
+              args+=(--tag "$tag")
+            fi
           done <<< "$TAGS"
+          if [ "${#args[@]}" -eq 0 ]; then
+            echo "::error::no image tag for $GITHUB_REF_NAME"
+            exit 1
+          fi
           docker buildx imagetools create --prefer-index=false "${args[@]}" "$IMAGE@$DIGEST"
           while IFS= read -r tag; do
             [ -z "$tag" ] && continue
-            got=$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest.Digest}}' | jq -r .)
+            got=$(docker buildx imagetools inspect "$tag" --format '{{.Manifest.Digest}}')
             if [ "$got" != "$DIGEST" ]; then
               echo "::error::$tag points at $got, want $DIGEST"
               exit 1
@@ -123,7 +153,7 @@ jobs:
           create-storage-record: false
 
   release:
-    needs: [build, publish]
+    needs: [build, smoke, newest, publish]
     runs-on: ubuntu-26.04
     permissions:
       contents: write
@@ -134,6 +164,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           DIGEST: ${{ needs.build.outputs.digest }}
+          NEWEST: ${{ needs.newest.outputs.newest }}
         run: |
           version="${TAG#v}"
           notes=$(cat <<EOF
@@ -147,8 +178,8 @@ jobs:
           Digest: \`$DIGEST\` (linux/amd64, linux/arm64)
           EOF
           )
-          flags=(--verify-tag --generate-notes --notes "$notes" --title "$TAG")
+          flags=(--verify-tag --generate-notes --notes "$notes" --title "$TAG" "--latest=$NEWEST")
           case "$version" in
-            *-*) flags+=(--prerelease --latest=false) ;;
+            *-*) flags+=(--prerelease) ;;
           esac
           gh release create "$TAG" "${flags[@]}"

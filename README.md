@@ -6,7 +6,7 @@ One container serves one COROS account. Only completed activities with a FIT fil
 
 ## Install
 
-Releases are published to `ghcr.io/xballoy/dreeve-coros-connector` for `linux/amd64` and `linux/arm64`, under three tags: the exact version (`1.2.3`), the latest patch of a minor version (`1.2`), and `latest`. A pre-release such as `1.3.0-rc.1` gets only its exact tag.
+Releases are published to `ghcr.io/xballoy/dreeve-coros-connector` for `linux/amd64` and `linux/arm64`, under three tags: the exact version (`1.2.3`), the latest patch of a minor version (`1.2`), and `latest` for the highest stable version. A pre-release such as `1.3.0-rc.1` gets only its exact tag.
 
 Each image carries a signed build provenance attestation. To check that an image was built by this repository's release workflow:
 
