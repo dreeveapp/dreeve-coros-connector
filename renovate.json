@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "docker:pinDigests", ":pinDevDependencies"],
+  "enabledManagers": ["gomod", "dockerfile", "github-actions", "npm", "custom.regex"],
+  "constraints": {
+    "ghActionsLock": "v0.4.1"
+  },
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "groupName": "Go toolchain",
+      "matchDepNames": ["go", "golang"]
+    },
+    {
+      "groupName": "gh-actions-lock",
+      "matchDepNames": ["github/gh-actions-lock"]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "gh-actions-lock extension installed by CI",
+      "managerFilePatterns": ["/^\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["gh extension install github/gh-actions-lock --pin (?<currentValue>v\\S+)"],
+      "depNameTemplate": "github/gh-actions-lock",
+      "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "gh-actions-lock extension Renovate uses to regenerate actions.lock",
+      "managerFilePatterns": ["/^renovate\\.json$/"],
+      "matchStrings": ["\"ghActionsLock\": \"(?<currentValue>v[^\"]+)\""],
+      "depNameTemplate": "github/gh-actions-lock",
+      "datasourceTemplate": "github-releases"
+    }
+  ]
+}
