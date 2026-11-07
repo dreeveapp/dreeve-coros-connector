@@ -272,3 +272,17 @@ func TestUnknownTimeZoneFails(t *testing.T) {
 	}
 	assertContains(t, r.stderr, "TZ", "Mars/Olympus_Mons")
 }
+
+func TestActivityAwaitingRetryStaysInTheWindowBeyondTheLookback(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.addActivity("900000000000000002", 15, withoutFile)
+	w.mustRun("login")
+	w.mustRun("sync-once")
+
+	available := w.addActivity("900000000000000002", 15)
+	w.mustRun("sync-once")
+
+	if files := w.watchFiles(); string(files["coros_900000000000000002.fit"]) != string(available.Content) {
+		t.Fatalf("activity awaiting a retry fell out of the window, got %v", keys(files))
+	}
+}

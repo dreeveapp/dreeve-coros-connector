@@ -61,6 +61,7 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 	slices.SortStableFunc(activities, func(a, b coros.Activity) int { return cmp.Compare(a.StartTime, b.StartTime) })
 
 	var delivered, retry int
+	completeUntil := today
 	for _, a := range activities {
 		if l.Has(a.LabelID) {
 			continue
@@ -73,6 +74,9 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		var resultErr *coros.ResultError
 		if errors.As(err, &resultErr) {
 			retry++
+			if day := startOfDay(time.Unix(a.StartTime, 0).In(zone)); day.Before(completeUntil) {
+				completeUntil = day
+			}
 			_, _ = fmt.Fprintf(stdout, "no file yet for activity %s (%s): COROS result %s %q, will retry next run\n", a.LabelID, a.Name, resultErr.Code, resultErr.Message)
 			continue
 		}
@@ -87,7 +91,7 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "delivered %s (%s)\n", entry.File, a.Name)
 	}
 
-	l.LastSync = today.Format(time.DateOnly)
+	l.LastSync = completeUntil.Format(time.DateOnly)
 	if err := l.Save(p.ledgerFile()); err != nil {
 		return err
 	}
