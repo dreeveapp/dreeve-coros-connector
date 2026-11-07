@@ -27,8 +27,10 @@ Each check is a job in `.github/workflows/ci.yml` and a dependency of the `CI ga
 | Workflow security | `zizmor .` |
 | Reachable Go vulnerabilities | `go tool govulncheck ./...` |
 
+actionlint and govulncheck are pinned by `package-lock.json` and `go.mod`. Match the others to CI: the `gh-actions-lock` version CI installs with `--pin`, and the zizmor version that the locked `zizmor-action` release ships. Never set the action's `version` input: an exact version fails once it is newer than the action, and the action's default is already hash-pinned in its own tree.
+
 Add a new job to the `needs` of `CI gate`.
 
 ## Renovate
 
-`renovate.json` updates Go modules (including the `go` directive and `go tool` dependencies), the Dockerfile base images, the actions and the tool versions in their `with:` inputs, and the npm tooling. For an action, Renovate rewrites the tag and regenerates `actions.lock` with the `gh-actions-lock` version set in `constraints.ghActionsLock`; a custom manager keeps that version and the one CI installs in step.
+`renovate.json` updates Go modules (including the `go` directive and `go tool` dependencies), the Dockerfile base images, the actions and the tool versions in their `with:` inputs, and the npm tooling. Renovate's `actions.lock` support is experimental: if a Renovate PR fails the `actions-lock` job, regenerate the lockfile on its branch with `gh actions-lock` and review the diff. For an action, Renovate rewrites the tag and regenerates `actions.lock` with the `gh-actions-lock` version set in `constraints.ghActionsLock`; a custom manager keeps that version and the one CI installs in step.
