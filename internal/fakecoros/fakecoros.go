@@ -68,7 +68,7 @@ func New(t testing.TB, cfg Config) *Server {
 		activities: map[string]Activity{},
 		fileGets:   map[string]int{},
 	}
-	for _, name := range []string{"login", "login-bad-credentials", "query-token-revoked", "query-activities-page-1", "download-fit", "download-no-file.synthetic"} {
+	for _, name := range []string{"login", "login-bad-credentials", "query-token-revoked", "query-wrong-region", "query-activities-page-1", "download-fit", "download-no-file.synthetic"} {
 		s.fixtures[name] = loadFixture(t, cfg.FixturesDir, name)
 	}
 
@@ -208,8 +208,12 @@ func (s *Server) withToken(w http.ResponseWriter, r *http.Request, region int, n
 	s.mu.Lock()
 	valid := s.tokens[token]
 	s.mu.Unlock()
-	if !valid || region != s.cfg.HomeRegionID {
+	if !valid {
 		s.writeJSON(w, s.fixtures["query-token-revoked"])
+		return
+	}
+	if region != s.cfg.HomeRegionID {
+		s.writeJSON(w, s.fixtures["query-wrong-region"])
 		return
 	}
 	next(w, r)

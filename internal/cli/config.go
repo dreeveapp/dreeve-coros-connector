@@ -35,7 +35,7 @@ func newClient(getenv Env) (*coros.Client, error) {
 		}
 		hosts = parsed
 	}
-	return coros.NewClient(hosts, nil), nil
+	return coros.NewClient(hosts), nil
 }
 
 func envOr(getenv Env, key, fallback string) string {
@@ -67,4 +67,16 @@ func resolveSince(raw string, today time.Time) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("SINCE must be -<days>d or YYYY-MM-DD, got %q", raw)
 	}
 	return t, nil
+}
+
+func timeZone(getenv Env) (*time.Location, error) {
+	name := getenv("TZ")
+	if name == "" {
+		return time.UTC, nil
+	}
+	zone, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("TZ %q is not a known time zone: %w", name, err)
+	}
+	return zone, nil
 }

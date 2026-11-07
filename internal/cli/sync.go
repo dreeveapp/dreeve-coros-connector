@@ -36,7 +36,11 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		return err
 	}
 
-	today := startOfDay(time.Now())
+	zone, err := timeZone(getenv)
+	if err != nil {
+		return err
+	}
+	today := startOfDay(time.Now().In(zone))
 	if l.Since == "" {
 		since, err := resolveSince(envOr(getenv, "SINCE", "-30d"), today)
 		if err != nil {
@@ -62,7 +66,8 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 			continue
 		}
 		if !safeLabelID.MatchString(a.LabelID) {
-			return fmt.Errorf("COROS returned an unexpected activity id %q", a.LabelID)
+			_, _ = fmt.Fprintf(stdout, "skipped activity with unexpected id %q (%s)\n", a.LabelID, a.Name)
+			continue
 		}
 		entry, err := deliver(ctx, client, session, p.watch, a)
 		if err != nil {
@@ -145,5 +150,5 @@ func explainTokenError(err error, tok storedToken) error {
 		return err
 	}
 	age := time.Since(tok.IssuedAt).Round(time.Minute)
-	return fmt.Errorf("COROS rejected the saved token (result 1019, token age %s): it was revoked by a newer login, e.g. Training Hub or another connector, or it expired; run `login` again", age)
+	return fmt.Errorf("COROS rejected the saved token (result %s, token age %s): it was revoked by a newer login, e.g. Training Hub or another connector, or it expired; run `login` again", coros.ResultInvalidToken, age)
 }

@@ -31,7 +31,7 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | `COROS_PASSWORD` | | `login` | COROS account password |
 | `SINCE` | `-30d` | `sync-once` | How far back the first sync goes: `-<days>d` or `YYYY-MM-DD`. Resolved once on the first run and stored in the ledger; later changes are ignored. |
 | `LOOKBACK_DAYS` | `7` | `sync-once` | How many days each run lists again, to catch activities that sync to COROS late. A run also reaches back to the last completed sync if that is older. |
-| `TZ` | `UTC` | `sync-once` | Time zone used to decide what "today" is |
+| `TZ` | `UTC` | `sync-once` | Optional IANA time zone, e.g. `Europe/Paris`, used to decide what "today" is when listing activities. Unset means UTC; an unknown zone is an error. |
 | `WATCH_DIR`, `STATE_DIR`, `TOKENS_DIR` | `/watch`, `/state`, `/tokens` | both | Override the volume paths, mainly for running outside a container |
 | `COROS_API_HOSTS` | COROS production hosts | both | Testing only: `1=<url>,2=<url>,3=<url>` region-to-host mapping |
 
@@ -43,8 +43,6 @@ services:
     image: ghcr.io/xballoy/dreeve-coros-connector:latest
     user: "1000:1000"
     read_only: true
-    environment:
-      TZ: Europe/Paris
     volumes:
       - ./dreeve/watch:/watch
       - ./coros/state:/state

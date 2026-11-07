@@ -31,7 +31,7 @@ func newFake(t *testing.T, regionID, homeRegionID int) (*fakecoros.Server, *coro
 	if err != nil {
 		t.Fatalf("ParseHosts: %v", err)
 	}
-	return fake, coros.NewClient(hosts, nil)
+	return fake, coros.NewClient(hosts)
 }
 
 func login(t *testing.T, fake *fakecoros.Server, client *coros.Client) *coros.Session {

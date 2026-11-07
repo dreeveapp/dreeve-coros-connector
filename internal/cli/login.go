@@ -24,7 +24,7 @@ func login(ctx context.Context, getenv Env, stdout io.Writer) error {
 
 	result, err := client.Login(ctx, email, password)
 	if errors.Is(err, coros.ErrBadCredentials) {
-		return errors.New("COROS rejected the email or password (result 1030), check COROS_EMAIL and COROS_PASSWORD")
+		return fmt.Errorf("COROS rejected the email or password (result %s), check COROS_EMAIL and COROS_PASSWORD", coros.ResultBadCredentials)
 	}
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func login(ctx context.Context, getenv Env, stdout io.Writer) error {
 	}
 	if err := client.Session(host, result.Token).Verify(ctx); err != nil {
 		if errors.Is(err, coros.ErrInvalidToken) {
-			return fmt.Errorf("COROS reported region %d but %s rejected the new token (result 1019): the account lives in another region; nothing was saved", result.RegionID, host)
+			return fmt.Errorf("COROS reported region %d but %s rejected the new token (result %s): the account lives in another region; nothing was saved", result.RegionID, host, coros.ResultInvalidToken)
 		}
 		return fmt.Errorf("verify token on %s: %w; nothing was saved", host, err)
 	}

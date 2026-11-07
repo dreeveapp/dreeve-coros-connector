@@ -22,8 +22,6 @@ type storedToken struct {
 	IssuedAt time.Time `json:"issuedAt"`
 }
 
-var errNotLoggedIn = errors.New("not logged in")
-
 func saveToken(dir string, tok storedToken) error {
 	data, err := json.MarshalIndent(tok, "", "  ")
 	if err != nil {
@@ -36,7 +34,7 @@ func loadToken(dir string) (storedToken, error) {
 	path := filepath.Join(dir, tokenFileName)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return storedToken{}, fmt.Errorf("%w: no COROS token in %s, run `login` first", errNotLoggedIn, dir)
+		return storedToken{}, fmt.Errorf("not logged in: no COROS token in %s, run `login` first", dir)
 	}
 	if err != nil {
 		return storedToken{}, fmt.Errorf("read token %s: %w", path, err)

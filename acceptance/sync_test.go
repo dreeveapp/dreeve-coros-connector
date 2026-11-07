@@ -223,3 +223,44 @@ func TestNextRunCoversTheGapSinceTheLastCompletedSync(t *testing.T) {
 		t.Fatalf("activity from the downtime gap was not delivered, got %v", keys(files))
 	}
 }
+
+func TestTimeZoneDefaultsToUTC(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	delete(w.env, "TZ")
+	w.mustRun("login")
+
+	w.mustRun("sync-once")
+
+	if want := time.Now().UTC().AddDate(0, 0, -30).Format(time.DateOnly); w.ledger().Since != want {
+		t.Fatalf("since = %q, want %q", w.ledger().Since, want)
+	}
+}
+
+func TestTimeZoneDecidesToday(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.env["TZ"] = "Pacific/Kiritimati"
+	zone, err := time.LoadLocation("Pacific/Kiritimati")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.mustRun("login")
+
+	w.mustRun("sync-once")
+
+	if want := time.Now().In(zone).AddDate(0, 0, -30).Format(time.DateOnly); w.ledger().Since != want {
+		t.Fatalf("since = %q, want %q", w.ledger().Since, want)
+	}
+}
+
+func TestUnknownTimeZoneFails(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.mustRun("login")
+	w.env["TZ"] = "Mars/Olympus_Mons"
+
+	r := w.run("sync-once")
+
+	if r.code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	assertContains(t, r.stderr, "TZ", "Mars/Olympus_Mons")
+}

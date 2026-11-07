@@ -105,7 +105,19 @@ func FuzzParse(f *testing.F) {
 	f.Add([]byte(`null`))
 	f.Add([]byte(`{"version":1}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
+		path := filepath.Join(t.TempDir(), "ledger.json")
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		loaded, loadErr := ledger.Load(path)
+		if loadErr == nil && len(loaded.Activities) == 0 && loaded.Since == "" && !json.Valid(data) {
+			t.Fatalf("Load silently reset a corrupt ledger %q", data)
+		}
+
 		l, err := ledger.Parse(data)
+		if (err == nil) != (loadErr == nil) {
+			t.Fatalf("Parse and Load disagree on %q: %v vs %v", data, err, loadErr)
+		}
 		if err != nil {
 			return
 		}

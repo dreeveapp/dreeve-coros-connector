@@ -18,8 +18,8 @@ import (
 
 const (
 	resultOK             = "0000"
-	resultInvalidToken   = "1019"
-	resultBadCredentials = "1030"
+	ResultInvalidToken   = "1019"
+	ResultBadCredentials = "1030"
 	loginRegion          = 1
 	fitFileType          = "4"
 	defaultPageSize      = 50
@@ -85,11 +85,8 @@ type Client struct {
 	http     *http.Client
 }
 
-func NewClient(hosts Hosts, httpClient *http.Client) *Client {
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 60 * time.Second}
-	}
-	return &Client{PageSize: defaultPageSize, hosts: hosts, http: httpClient}
+func NewClient(hosts Hosts) *Client {
+	return &Client{PageSize: defaultPageSize, hosts: hosts, http: &http.Client{Timeout: 60 * time.Second}}
 }
 
 type LoginResult struct {
@@ -131,7 +128,7 @@ func (c *Client) Login(ctx context.Context, email, password string) (LoginResult
 	}
 	if err := c.do(req, "login", &data); err != nil {
 		var resultErr *ResultError
-		if errors.As(err, &resultErr) && resultErr.Code == resultBadCredentials {
+		if errors.As(err, &resultErr) && resultErr.Code == ResultBadCredentials {
 			return LoginResult{}, ErrBadCredentials
 		}
 		return LoginResult{}, err
@@ -183,7 +180,7 @@ func (c *Client) do(req *http.Request, endpoint string, data any) error {
 	}
 	switch env.Result {
 	case resultOK:
-	case resultInvalidToken:
+	case ResultInvalidToken:
 		return fmt.Errorf("COROS %s: %w", endpoint, ErrInvalidToken)
 	default:
 		return &ResultError{Endpoint: endpoint, Code: env.Result, Message: env.Message}
@@ -204,7 +201,6 @@ type Activity struct {
 	LabelID   string `json:"labelId"`
 	SportType int    `json:"sportType"`
 	Name      string `json:"name"`
-	Date      int    `json:"date"`
 	StartTime int64  `json:"startTime"`
 }
 
@@ -212,10 +208,6 @@ type Session struct {
 	client *Client
 	host   string
 	token  string
-}
-
-func (s *Session) Host() string {
-	return s.host
 }
 
 func (s *Session) Verify(ctx context.Context) error {

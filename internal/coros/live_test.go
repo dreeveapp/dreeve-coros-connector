@@ -23,7 +23,7 @@ func TestLiveContract(t *testing.T) {
 		t.Fatal("set COROS_EMAIL and COROS_PASSWORD to run the live contract check")
 	}
 	ctx := context.Background()
-	client := coros.NewClient(coros.DefaultHosts(), nil)
+	client := coros.NewClient(coros.DefaultHosts())
 
 	if _, err := client.Login(ctx, liveEmail, livePassword+"-wrong"); !errors.Is(err, coros.ErrBadCredentials) {
 		t.Fatalf("bad credentials: expected ErrBadCredentials, got %v", err)
