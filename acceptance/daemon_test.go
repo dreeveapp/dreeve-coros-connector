@@ -263,8 +263,8 @@ func TestRunStopsOnACorruptLedger(t *testing.T) {
 	}
 }
 
-func TestPollIntervalBelowTheMinimumIsRejectedAtStartup(t *testing.T) {
-	for _, value := range []string{"899", "60", "-1", "hourly"} {
+func TestPollIntervalOutsideTheAllowedRangeIsRejectedAtStartup(t *testing.T) {
+	for _, value := range []string{"899", "60", "-1", "hourly", "604801", "9300000000"} {
 		t.Run(value, func(t *testing.T) {
 			w := newWorld(t, 1, 1)
 			w.mustRun("login")
@@ -276,7 +276,7 @@ func TestPollIntervalBelowTheMinimumIsRejectedAtStartup(t *testing.T) {
 			if r.code == 0 {
 				t.Fatal("expected a non-zero exit")
 			}
-			assertContains(t, r.stderr, "POLL_INTERVAL", "900")
+			assertContains(t, r.stderr, "POLL_INTERVAL", "900", "604800")
 		})
 	}
 }

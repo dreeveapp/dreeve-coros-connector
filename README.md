@@ -40,7 +40,7 @@ The image runs as a non-root user and works with a read-only root filesystem. Wh
 | --- | --- | --- | --- |
 | `COROS_EMAIL` | | `login` | COROS account email |
 | `COROS_PASSWORD` | | `login` | COROS account password |
-| `POLL_INTERVAL` | `3600` | `run` | Seconds between sync cycles, at least `900`. Each wait is randomised by ±10%. A lower value stops `run` at startup. |
+| `POLL_INTERVAL` | `3600` | `run` | Seconds between sync cycles, from `900` to `604800` (one week). Each wait is randomised by ±10%. A value outside that range stops `run` at startup. |
 | `HTTP_ADDR` | `:8080` | `run`, `healthcheck` | Address the health server listens on, and that `healthcheck` queries (an empty or wildcard host means `127.0.0.1`) |
 | `SINCE` | `-30d` | `sync-once`, `run` | How far back the first sync goes: `-<days>d` or `YYYY-MM-DD`. Resolved once on the first run and stored in the ledger; later changes are ignored. |
 | `LOOKBACK_DAYS` | `7` | `sync-once`, `run` | How many days each run lists again, to catch activities that sync to COROS late. A run also reaches back to the last completed sync, or to the oldest activity still waiting for a retry, if that is older. |

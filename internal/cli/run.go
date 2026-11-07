@@ -15,6 +15,7 @@ import (
 
 const (
 	minPollInterval = 900
+	maxPollInterval = 7 * 24 * 3600
 	defaultHTTPAddr = ":8080"
 )
 
@@ -28,8 +29,8 @@ func pollInterval(getenv Env) (time.Duration, error) {
 	}
 	raw := envOr(getenv, "POLL_INTERVAL", "3600")
 	n, err := strconv.Atoi(raw)
-	if err != nil || n < minPollInterval {
-		return 0, fmt.Errorf("POLL_INTERVAL must be a number of seconds of at least %d, got %q", minPollInterval, raw)
+	if err != nil || n < minPollInterval || n > maxPollInterval {
+		return 0, fmt.Errorf("POLL_INTERVAL must be a number of seconds between %d and %d, got %q", minPollInterval, maxPollInterval, raw)
 	}
 	return time.Duration(n) * time.Second, nil
 }
