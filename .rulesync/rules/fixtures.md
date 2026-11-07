@@ -1,8 +1,8 @@
 ---
 root: false
 targets: ["*"]
-description: "How to record and redact COROS API fixtures"
-globs: ["testdata/coros/**", "scripts/capture-coros-fixtures.sh"]
+description: "How to record and redact COROS API fixtures and golden FIT files"
+globs: ["testdata/coros/**", "testdata/fit/**", "scripts/capture-coros-fixtures.sh", "internal/fitscrub/**", "tools/fitscrub/**"]
 ---
 
 # COROS fixtures
@@ -38,3 +38,21 @@ Review every file by hand before committing, especially fields the script does n
 ## Synthetic fixtures
 
 A response that could not be recorded is named `*.synthetic.json` and its `message` says it is synthetic. Replace it with a recording as soon as one is available.
+
+## Golden FIT files
+
+`testdata/fit/` holds real activity files exported from COROS, named `coros-<activity>.fit`. Only a human with a COROS account can export them, from Training Hub or with `sync-once` into a folder outside the repository.
+
+Never commit a raw export. Scrub it first:
+
+```
+go run ./tools/fitscrub -origin 48.8584,2.2945 raw.fit testdata/fit/coros-<activity>.fit
+```
+
+`fitscrub` patches values in place and recomputes the CRCs, so every other byte stays as COROS served it. It never re-encodes the file:
+
+- positions (every `semicircles` field): translated so the first position lands on the origin, keeping the track's shape; missing positions stay missing
+- `serial_number` fields: a fixed placeholder
+- `user_profile`: every field cleared
+
+It refuses a file that is truncated, fails its CRC, or does not decode. It does not touch developer fields: check their names in the `field_description` messages and that none holds a position before committing. Timestamps, heart rate and the device model stay as recorded.

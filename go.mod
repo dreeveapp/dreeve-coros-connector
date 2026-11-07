@@ -6,6 +6,7 @@ tool golang.org/x/vuln/cmd/govulncheck
 
 require (
 	github.com/creack/pty v1.1.24
+	github.com/muktihari/fit v0.28.6
 	golang.org/x/term v0.47.0
 )
 
