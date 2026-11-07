@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"path/filepath"
 	"time"
 
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 )
 
-func login(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
+func login(ctx context.Context, getenv Env, a *app) error {
 	email, password := getenv("COROS_EMAIL"), getenv("COROS_PASSWORD")
+	a.secrets.Add(password)
+	a.secrets.Add(coros.PasswordHash(password))
 	if email == "" || password == "" {
 		return errors.New("set COROS_EMAIL and COROS_PASSWORD")
 	}
@@ -29,6 +30,7 @@ func login(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
 	if err != nil {
 		return err
 	}
+	a.secrets.Add(result.Token)
 	host, err := client.HomeHost(result.RegionID)
 	if err != nil {
 		return fmt.Errorf("COROS reported region %d, which this connector does not know; nothing was saved", result.RegionID)
@@ -41,10 +43,10 @@ func login(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
 	}
 
 	tok := storedToken{Token: result.Token, Host: host, RegionID: result.RegionID, IssuedAt: time.Now().UTC().Truncate(time.Second)}
-	if err := saveToken(p.tokens, tok); err != nil {
+	if err := saveToken(p.tokens, a.umask.apply(0o600), tok); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "logged in to COROS region %d (%s), token saved to %s\n", result.RegionID, host, filepath.Join(p.tokens, tokenFileName))
-	_, _ = fmt.Fprintln(stdout, "note: this login signed out every other COROS session of the account, including Training Hub")
+	a.log.Info("logged in to COROS, token saved", "region", result.RegionID, "host", host, "file", filepath.Join(p.tokens, tokenFileName))
+	a.log.Info("this login signed out every other COROS session of the account, including Training Hub")
 	return nil
 }

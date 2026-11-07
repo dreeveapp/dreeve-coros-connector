@@ -14,7 +14,7 @@ import (
 func TestLoginPersistsTheTokenPrivately(t *testing.T) {
 	w := newWorld(t, 3, 3)
 	r := w.mustRun("login")
-	assertContains(t, r.stdout, "region 3")
+	assertContains(t, r.stderr, "region=3")
 
 	path := filepath.Join(w.tokens, "token.json")
 	info, err := os.Stat(path)
@@ -167,7 +167,7 @@ func TestUnexpectedDownloadResultIsReportedAndRetriedOnTheNextRun(t *testing.T) 
 
 	r := w.mustRun("sync-once")
 
-	assertContains(t, r.stdout, "900000000000000002", "9999")
+	assertContains(t, r.stderr, "900000000000000002", "9999")
 	if files := w.watchFiles(); len(files) != 0 {
 		t.Fatalf("expected nothing delivered, got %v", keys(files))
 	}

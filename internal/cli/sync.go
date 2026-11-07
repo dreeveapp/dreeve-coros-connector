@@ -6,8 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"slices"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 	"github.com/xballoy/dreeve-coros-connector/internal/daemon"
 	"github.com/xballoy/dreeve-coros-connector/internal/ledger"
+	"github.com/xballoy/dreeve-coros-connector/internal/logging"
 	"github.com/xballoy/dreeve-coros-connector/internal/throttle"
 )
 
@@ -28,9 +30,13 @@ type syncer struct {
 	client   *coros.Client
 	zone     *time.Location
 	since    string
+	fileMode os.FileMode
+	dryRun   bool
+	log      *slog.Logger
+	secrets  *logging.Secrets
 }
 
-func newSyncer(getenv Env) (*syncer, error) {
+func newSyncer(getenv Env, a *app) (*syncer, error) {
 	lookback, err := lookbackDays(getenv)
 	if err != nil {
 		return nil, err
@@ -47,15 +53,22 @@ func newSyncer(getenv Env) (*syncer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &syncer{paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d")}, nil
+	dryRun, err := boolEnv(getenv, "DRY_RUN")
+	if err != nil {
+		return nil, err
+	}
+	return &syncer{dryRun: dryRun, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
 }
 
-func syncOnce(ctx context.Context, getenv Env, stdout, _ io.Writer) error {
-	s, err := newSyncer(getenv)
+func syncOnce(ctx context.Context, getenv Env, a *app) error {
+	s, err := newSyncer(getenv, a)
 	if err != nil {
 		return err
 	}
-	_, err = s.cycle(ctx, "sync-once", stdout)
+	if err := s.boot(); err != nil {
+		return err
+	}
+	_, err = s.cycle(ctx, "sync-once")
 	return err
 }
 
@@ -79,7 +92,7 @@ func isThrottled(err error) bool {
 	return errors.As(err, &httpErr) && httpErr.Status == http.StatusTooManyRequests
 }
 
-func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map[string]int, error) {
+func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error) {
 	l, err := ledger.Load(s.paths.ledgerFile())
 	if err != nil {
 		return nil, &fatalError{err}
@@ -88,6 +101,8 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	if err != nil {
 		return statusCounts(l), err
 	}
+	s.secrets.Add(tok.Token)
+	s.log.Debug("loaded token", "host", tok.Host, "region", tok.RegionID, "age", time.Since(tok.IssuedAt).Round(time.Minute).String())
 	th := throttle.New(throttle.Config{Delay: s.limits.delay, BaseBackoff: baseBackoff, MaxBackoff: s.limits.maxBackoff}, l.Backoff)
 	if until, ok := th.BackingOff(); ok {
 		return statusCounts(l), &throttledError{until: until}
@@ -109,13 +124,14 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	backOff := func(cause error) (map[string]int, error) {
 		until := th.Throttled()
 		l.Backoff = th.Backoff()
-		if err := l.Save(s.paths.ledgerFile()); err != nil {
+		if err := s.save(l); err != nil {
 			return statusCounts(l), &fatalError{err}
 		}
 		return statusCounts(l), &throttledError{until: until, err: cause}
 	}
 
 	session := s.client.Session(tok.Host, tok.Token)
+	s.log.Debug("listing activities", "from", from.Format(time.DateOnly), "to", today.Format(time.DateOnly))
 	activities, err := session.ListActivities(ctx, from, today)
 	if isThrottled(err) {
 		return backOff(err)
@@ -125,7 +141,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	}
 	slices.SortStableFunc(activities, func(a, b coros.Activity) int { return cmp.Compare(a.StartTime, b.StartTime) })
 
-	var delivered, retry, attempted, deferred int
+	var delivered, wouldDeliver, retry, attempted, deferred int
 	completeUntil := today
 	keepInWindow := func(a coros.Activity) {
 		if day := startOfDay(time.Unix(a.StartTime, 0).In(s.zone)).AddDate(0, 0, -1); day.Before(completeUntil) {
@@ -134,10 +150,16 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	}
 	for _, a := range activities {
 		if e, ok := l.Activities[a.LabelID]; ok && e.Status.Settled() {
+			s.log.Debug("already settled", "labelId", a.LabelID, "status", string(e.Status))
 			continue
 		}
 		if !safeLabelID.MatchString(a.LabelID) {
-			_, _ = fmt.Fprintf(stdout, "skipped activity with unexpected id %q (%s)\n", a.LabelID, a.Name)
+			s.log.Warn("skipped activity with an unexpected id", "labelId", a.LabelID, "name", a.Name)
+			continue
+		}
+		if s.dryRun {
+			wouldDeliver++
+			s.log.Info("dry run: would deliver", "file", fitName(a.LabelID), "labelId", a.LabelID, "name", a.Name, "thisCycle", wouldDeliver <= s.limits.maxDownloads)
 			continue
 		}
 		if attempted == s.limits.maxDownloads {
@@ -149,7 +171,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 		if err := th.Pace(ctx); err != nil {
 			return statusCounts(l), err
 		}
-		entry, err := deliver(ctx, s.client, session, s.paths.watch, a)
+		entry, err := deliver(ctx, s.client, session, s.paths.watch, s.fileMode, a)
 		th.Downloaded()
 		if err != nil && ctx.Err() != nil {
 			return statusCounts(l), ctx.Err()
@@ -158,7 +180,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 		switch {
 		case err == nil:
 			delivered++
-			_, _ = fmt.Fprintf(stdout, "delivered %s (%s)\n", entry.File, a.Name)
+			s.log.Info("delivered", "file", entry.File, "labelId", a.LabelID, "name", a.Name)
 		case isThrottled(err):
 			keepInWindow(a)
 			l.CompleteUntil = earlier(l.CompleteUntil, completeUntil)
@@ -168,14 +190,14 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 		case errors.As(err, &fatal):
 			return statusCounts(l), err
 		default:
-			entry = s.failedAttempt(l.Activities[a.LabelID], a, err, stdout)
+			entry = s.failedAttempt(l.Activities[a.LabelID], a, err)
 			if entry.Status == ledger.Pending {
 				keepInWindow(a)
 				retry++
 			}
 		}
 		l.Record(a.LabelID, entry)
-		if err := l.Save(s.paths.ledgerFile()); err != nil {
+		if err := s.save(l); err != nil {
 			return statusCounts(l), &fatalError{err}
 		}
 	}
@@ -183,12 +205,25 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	th.Recovered()
 	l.Backoff = th.Backoff()
 	l.CompleteUntil = completeUntil.Format(time.DateOnly)
-	if err := l.Save(s.paths.ledgerFile()); err != nil {
+	if err := s.save(l); err != nil {
 		return statusCounts(l), &fatalError{err}
 	}
-	_, _ = fmt.Fprintf(stdout, "%s: %d listed since %s, %d delivered, %d to retry, %d left for the next cycle\n", label, len(activities), from.Format(time.DateOnly), delivered, retry, deferred)
+	if s.dryRun {
+		s.log.Info(label+" dry run finished, nothing written", "listed", len(activities), "since", from.Format(time.DateOnly), "wouldDeliver", wouldDeliver, "maxPerCycle", s.limits.maxDownloads)
+		return statusCounts(l), nil
+	}
+	s.log.Info(label+" finished", "listed", len(activities), "since", from.Format(time.DateOnly), "delivered", delivered, "toRetry", retry, "leftForNextCycle", deferred)
 	return statusCounts(l), nil
 }
+
+func (s *syncer) save(l *ledger.Ledger) error {
+	if s.dryRun {
+		return nil
+	}
+	return l.Save(s.paths.ledgerFile(), s.fileMode)
+}
+
+func fitName(labelID string) string { return "coros_" + labelID + ".fit" }
 
 func earlier(stored string, candidate time.Time) string {
 	if stored != "" {
@@ -199,7 +234,7 @@ func earlier(stored string, candidate time.Time) string {
 	return candidate.Format(time.DateOnly)
 }
 
-func (s *syncer) failedAttempt(previous ledger.Entry, a coros.Activity, err error, stdout io.Writer) ledger.Entry {
+func (s *syncer) failedAttempt(previous ledger.Entry, a coros.Activity, err error) ledger.Entry {
 	entry := ledger.Entry{
 		Status:    ledger.Pending,
 		SportType: a.SportType,
@@ -219,14 +254,14 @@ func (s *syncer) failedAttempt(previous ledger.Entry, a coros.Activity, err erro
 		what = fmt.Sprintf("COROS result %s %q", resultErr.Code, resultErr.Message)
 	}
 	if entry.Attempts < s.limits.maxAttempts {
-		_, _ = fmt.Fprintf(stdout, "attempt %d of %d failed for activity %s (%s): %s, will retry next run\n", entry.Attempts, s.limits.maxAttempts, a.LabelID, a.Name, what)
+		s.log.Warn("download failed, will retry next run", "labelId", a.LabelID, "name", a.Name, "attempt", entry.Attempts, "maxAttempts", s.limits.maxAttempts, "error", what)
 		return entry
 	}
 	entry.Status = ledger.Failed
 	if isResult {
 		entry.Status = ledger.NoFile
 	}
-	_, _ = fmt.Fprintf(stdout, "giving up on activity %s (%s) after %d attempts: %s, recorded as %s\n", a.LabelID, a.Name, entry.Attempts, what, entry.Status)
+	s.log.Warn("giving up on activity", "labelId", a.LabelID, "name", a.Name, "attempts", entry.Attempts, "error", what, "status", string(entry.Status))
 	return entry
 }
 
@@ -238,7 +273,7 @@ func statusCounts(l *ledger.Ledger) map[string]int {
 	return counts
 }
 
-func deliver(ctx context.Context, client *coros.Client, session *coros.Session, watchDir string, a coros.Activity) (ledger.Entry, error) {
+func deliver(ctx context.Context, client *coros.Client, session *coros.Session, watchDir string, mode os.FileMode, a coros.Activity) (ledger.Entry, error) {
 	fileURL, err := session.DownloadURL(ctx, a)
 	if err != nil {
 		return ledger.Entry{}, err
@@ -248,8 +283,8 @@ func deliver(ctx context.Context, client *coros.Client, session *coros.Session, 
 		return ledger.Entry{}, fmt.Errorf("download activity %s: %w", a.LabelID, err)
 	}
 
-	name := "coros_" + a.LabelID + ".fit"
-	if err := atomicfile.Write(watchDir, "."+name+".part", name, 0o644, bytes.NewReader(data)); err != nil {
+	name := fitName(a.LabelID)
+	if err := atomicfile.Write(watchDir, "."+name+".part", name, mode, bytes.NewReader(data)); err != nil {
 		return ledger.Entry{}, &fatalError{fmt.Errorf("deliver activity %s: %w", a.LabelID, err)}
 	}
 	return ledger.Entry{Status: ledger.Delivered, SportType: a.SportType, Name: a.Name, File: name, At: time.Now().UTC().Format(time.RFC3339)}, nil

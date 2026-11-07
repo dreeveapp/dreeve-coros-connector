@@ -238,7 +238,7 @@ func TestTransientFailureIsRetriedAndEventuallyDelivered(t *testing.T) {
 				if e.Status != "pending" || e.Attempts != attempt || e.Error == "" {
 					t.Fatalf("after attempt %d, ledger entry = %+v, want pending with the error", attempt, e)
 				}
-				assertContains(t, r.stdout, a.LabelID, "will retry")
+				assertContains(t, r.stderr, a.LabelID, "will retry")
 			}
 
 			w.mustRun("sync-once")
@@ -284,7 +284,7 @@ func TestUnexpectedDownloadResultBecomesNoFileAfterMaxAttempts(t *testing.T) {
 
 	for range 2 {
 		r := w.mustRun("sync-once")
-		assertContains(t, r.stdout, a.LabelID, "9999")
+		assertContains(t, r.stderr, a.LabelID, "9999")
 	}
 
 	if e := w.ledger().Activities[a.LabelID]; e.Status != "no-file" || e.ResultCode != "9999" || e.Attempts != 2 {
