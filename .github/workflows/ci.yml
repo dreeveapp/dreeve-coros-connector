@@ -73,3 +73,24 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npx --no-install rulesync generate --check
       - run: npx --no-install rulesync doctor --strict
+
+  ci_gate:
+    name: CI gate
+    if: always()
+    needs:
+      - test
+      - lint
+      - container-smoke
+      - rulesync
+    runs-on: ubuntu-26.04
+    permissions: {}
+    steps:
+      - name: Check required jobs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+            exit 1
+          fi
+        shell: bash
