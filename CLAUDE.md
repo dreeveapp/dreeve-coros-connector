@@ -18,7 +18,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 
 - Write no comments in code, including test files. Names and tests carry the meaning; rationale goes in the PR description.
 - Work test-first: write a failing test through a public surface, make it pass, refactor.
-- Pin every dependency to an exact version: Go modules, npm devDependencies, container images by digest, GitHub Actions by full commit SHA with a `# vX.Y.Z` comment.
+- Pin every dependency to an exact version: Go modules, npm devDependencies, container images by digest, GitHub Actions by full semver tag locked in `.github/workflows/actions.lock` (see the supply-chain rule).
 - Never log or persist the COROS password. Only `login` reads it.
 - Every COROS login revokes every other token on the account. Never add code or tests that log in against the real API outside the live contract check.
 - Agent guidance lives in `.rulesync/`. Edit it there, run `npm ci --ignore-scripts && npx rulesync generate`, and commit the generated files.
@@ -33,5 +33,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 | Container smoke | `CONTAINER_SMOKE=1 go test -count=1 -run TestContainerSmoke ./acceptance` |
 | Live contract (local only, never CI) | `COROS_EMAIL=... COROS_PASSWORD=... go test -tags live -count=1 -run TestLiveContract ./internal/coros` |
 | Lint | `golangci-lint run ./...` |
+| Vulnerabilities | `go tool govulncheck ./...` |
+| Workflows | `npx --no-install actionlint`, `zizmor .`, `gh actions-lock --verify` |
 
 The live contract check logs in to the real COROS API, which signs out Training Hub and every running connector on that account.
