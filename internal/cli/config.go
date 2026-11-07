@@ -36,12 +36,12 @@ func newClient(getenv Env) (*coros.Client, error) {
 		hosts = parsed
 	}
 	client := coros.NewClient(hosts)
-	if raw := getenv("HTTP_TIMEOUT_TESTING"); raw != "" {
-		d, err := time.ParseDuration(raw)
-		if err != nil || d <= 0 {
-			return nil, fmt.Errorf("HTTP_TIMEOUT_TESTING must be a positive duration, got %q", raw)
-		}
-		client.SetTimeout(d)
+	timeout, err := positiveDuration(getenv, "HTTP_TIMEOUT_TESTING")
+	if err != nil {
+		return nil, err
+	}
+	if timeout > 0 {
+		client.SetTimeout(timeout)
 	}
 	return client, nil
 }
@@ -69,13 +69,8 @@ func loadLimits(getenv Env) (limits, error) {
 		return limits{}, err
 	}
 	l.maxBackoff = time.Duration(backoff) * time.Second
-	if raw := getenv("DOWNLOAD_DELAY_TESTING"); raw != "" {
-		d, err := time.ParseDuration(raw)
-		if err != nil || d <= 0 {
-			return limits{}, fmt.Errorf("DOWNLOAD_DELAY_TESTING must be a positive duration, got %q", raw)
-		}
-		l.delay = d
-		return l, nil
+	if l.delay, err = positiveDuration(getenv, "DOWNLOAD_DELAY_TESTING"); err != nil || l.delay > 0 {
+		return l, err
 	}
 	delay, err := positiveInt(getenv, "DOWNLOAD_DELAY_SECONDS", 2)
 	if err != nil {
@@ -138,4 +133,16 @@ func timeZone(getenv Env) (*time.Location, error) {
 		return nil, fmt.Errorf("TZ %q is not a known time zone: %w", name, err)
 	}
 	return zone, nil
+}
+
+func positiveDuration(getenv Env, key string) (time.Duration, error) {
+	raw := getenv(key)
+	if raw == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration, got %q", key, raw)
+	}
+	return d, nil
 }

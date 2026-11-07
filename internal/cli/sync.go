@@ -150,7 +150,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 			return statusCounts(l), err
 		}
 		entry, err := deliver(ctx, s.client, session, s.paths.watch, a)
-		if ctx.Err() != nil {
+		if err != nil && ctx.Err() != nil {
 			return statusCounts(l), ctx.Err()
 		}
 		var fatal *fatalError
@@ -180,7 +180,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 	}
 
 	th.Recovered()
-	l.Backoff = nil
+	l.Backoff = th.Backoff()
 	l.CompleteUntil = completeUntil.Format(time.DateOnly)
 	if err := l.Save(s.paths.ledgerFile()); err != nil {
 		return statusCounts(l), &fatalError{err}
