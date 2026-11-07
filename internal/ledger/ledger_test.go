@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/xballoy/dreeve-coros-connector/internal/ledger"
 )
@@ -26,7 +27,10 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 	l.Since = "2026-10-08"
 	l.CompleteUntil = "2026-11-07"
 	l.Record("900000000000000002", ledger.Entry{Status: ledger.Delivered, SportType: 101, File: "coros_900000000000000002.fit"})
-	l.Record("900000000000000003", ledger.Entry{Status: ledger.NoFile, SportType: 900, ResultCode: "1001"})
+	l.Record("900000000000000003", ledger.Entry{Status: ledger.NoFile, SportType: 900, ResultCode: "1001", Attempts: 5})
+	l.Record("900000000000000005", ledger.Entry{Status: ledger.Pending, SportType: 100, Attempts: 2, Error: "COROS file download returned HTTP 503"})
+	l.Record("900000000000000006", ledger.Entry{Status: ledger.Failed, SportType: 100, Attempts: 5, Error: "COROS file download returned HTTP 503"})
+	l.Backoff = &ledger.Backoff{Until: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Count: 2}
 
 	if err := l.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -68,6 +72,9 @@ func TestParseRejectsCorruptLedgers(t *testing.T) {
 		"bad since":         `{"version":1,"since":"yesterday","activities":{}}`,
 		"bad completeUntil": `{"version":1,"since":"2026-10-08","completeUntil":"soon","activities":{}}`,
 		"unknown status":    `{"version":1,"since":"2026-10-08","activities":{"1":{"status":"lost"}}}`,
+		"backoff no count":  `{"version":1,"since":"2026-10-08","activities":{},"backoff":{"until":"2026-11-07T09:30:00Z","count":0}}`,
+		"backoff no until":  `{"version":1,"since":"2026-10-08","activities":{},"backoff":{"count":1}}`,
+		"backoff bad until": `{"version":1,"since":"2026-10-08","activities":{},"backoff":{"until":"later","count":1}}`,
 		"trailing garbage":  `{"version":1,"since":"2026-10-08","activities":{}} {}`,
 		"unknown field":     `{"version":1,"since":"2026-10-08","activities":{},"extra":true}`,
 	}
@@ -101,6 +108,7 @@ func TestLoadCorruptFileFailsAndLeavesItUntouched(t *testing.T) {
 func FuzzParse(f *testing.F) {
 	f.Add([]byte(`{"version":1,"since":"2026-10-08","activities":{"900000000000000002":{"status":"delivered","sportType":101,"file":"coros_900000000000000002.fit"}}}`))
 	f.Add([]byte(`{"version":1,"since":"","activities":{}}`))
+	f.Add([]byte(`{"version":1,"since":"2026-10-08","backoff":{"until":"2026-11-07T09:30:00+02:00","count":2},"activities":{"9":{"status":"pending","attempts":1,"error":"HTTP 503"}}}`))
 	f.Add([]byte(``))
 	f.Add([]byte(`null`))
 	f.Add([]byte(`{"version":1}`))
@@ -143,7 +151,9 @@ func TestCountsListsEveryStatusIncludingEmptyOnes(t *testing.T) {
 	l.Record("900000000000000002", ledger.Entry{Status: ledger.Delivered})
 	l.Record("900000000000000003", ledger.Entry{Status: ledger.Delivered})
 
-	want := map[ledger.Status]int{ledger.Delivered: 2, ledger.NoFile: 0}
+	l.Record("900000000000000004", ledger.Entry{Status: ledger.Pending, Attempts: 1})
+
+	want := map[ledger.Status]int{ledger.Delivered: 2, ledger.NoFile: 0, ledger.Pending: 1, ledger.Failed: 0}
 	if got := l.Counts(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Counts() = %v, want %v", got, want)
 	}

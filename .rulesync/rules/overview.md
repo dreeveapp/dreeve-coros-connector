@@ -16,7 +16,8 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 - `internal/daemon`: the `run` schedule (interval with ±10% jitter, injectable clock) and the `/healthz` and `/status` handler
 - `internal/coros`: COROS API client
 - `internal/ledger`: `/state/ledger.json` contract
-- `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`
+- `internal/throttle`: download pacing and the backoff after an HTTP 429 (injectable clock); the backoff is stored in the ledger so it survives restarts
+- `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`, injects faults (429, 5xx, truncated or stalled bodies) and logs every request it receives
 - `acceptance`: black-box tests that build and drive the binary
 - `tools/fakecoros`: dev-only fake COROS server for running the connector by hand (see the `run-app` skill); never shipped in the image
 

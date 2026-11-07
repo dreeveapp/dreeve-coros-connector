@@ -3,7 +3,7 @@ package coros_test
 import (
 	"context"
 	"errors"
-	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -153,14 +153,9 @@ func TestDownloadFetchesTheFitFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DownloadURL: %v", err)
 	}
-	body, err := client.Fetch(context.Background(), url)
+	got, err := client.Fetch(context.Background(), url)
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
-	}
-	defer func() { _ = body.Close() }()
-	got, err := io.ReadAll(body)
-	if err != nil {
-		t.Fatal(err)
 	}
 	if string(got) != "fit bytes" {
 		t.Fatalf("unexpected file content %q", got)
@@ -183,5 +178,48 @@ func TestParseHostsRejectsMalformedInput(t *testing.T) {
 		if _, err := coros.ParseHosts(input); err == nil {
 			t.Errorf("expected an error for %q", input)
 		}
+	}
+}
+
+func TestTruncatedFileIsAnError(t *testing.T) {
+	fake, client := newFake(t, 1, 1)
+	fake.AddActivity(fakecoros.Activity{LabelID: "900000000000000002", SportType: 101, Start: day, Content: []byte("complete fit bytes")})
+	session := login(t, fake, client)
+	url, err := session.DownloadURL(context.Background(), coros.Activity{LabelID: "900000000000000002", SportType: 101})
+	if err != nil {
+		t.Fatalf("DownloadURL: %v", err)
+	}
+	fake.InjectFaults(fakecoros.File, fakecoros.Truncate)
+
+	if got, err := client.Fetch(context.Background(), url); err == nil {
+		t.Fatalf("expected an error for a truncated file, got %q", got)
+	}
+}
+
+func TestStalledFileTimesOut(t *testing.T) {
+	fake, client := newFake(t, 1, 1)
+	client.SetTimeout(200 * time.Millisecond)
+	fake.AddActivity(fakecoros.Activity{LabelID: "900000000000000002", SportType: 101, Start: day, Content: []byte("complete fit bytes")})
+	session := login(t, fake, client)
+	url, err := session.DownloadURL(context.Background(), coros.Activity{LabelID: "900000000000000002", SportType: 101})
+	if err != nil {
+		t.Fatalf("DownloadURL: %v", err)
+	}
+	fake.InjectFaults(fakecoros.File, fakecoros.Stall)
+
+	if _, err := client.Fetch(context.Background(), url); err == nil {
+		t.Fatal("expected a timeout")
+	}
+}
+
+func TestThrottlingIsReportedAsHTTP429(t *testing.T) {
+	fake, client := newFake(t, 1, 1)
+	session := login(t, fake, client)
+	fake.InjectFaults(fakecoros.Query, fakecoros.Throttle)
+
+	_, err := session.ListActivities(context.Background(), day, day)
+	var httpErr *coros.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.Status != http.StatusTooManyRequests {
+		t.Fatalf("expected an HTTPError with status 429, got %v", err)
 	}
 }

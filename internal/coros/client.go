@@ -143,7 +143,11 @@ func (c *Client) Session(host, token string) *Session {
 	return &Session{client: c, host: strings.TrimRight(host, "/"), token: token}
 }
 
-func (c *Client) Fetch(ctx context.Context, fileURL string) (io.ReadCloser, error) {
+func (c *Client) SetTimeout(d time.Duration) {
+	c.http.Timeout = d
+}
+
+func (c *Client) Fetch(ctx context.Context, fileURL string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
 	if err != nil {
 		return nil, err
@@ -152,11 +156,15 @@ func (c *Client) Fetch(ctx context.Context, fileURL string) (io.ReadCloser, erro
 	if err != nil {
 		return nil, fmt.Errorf("download file: %w", err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
 		return nil, &HTTPError{Endpoint: "file download", Status: resp.StatusCode}
 	}
-	return resp.Body, nil
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("download file: %w", err)
+	}
+	return data, nil
 }
 
 type envelope struct {

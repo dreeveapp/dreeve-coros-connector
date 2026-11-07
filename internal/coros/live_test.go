@@ -67,15 +67,12 @@ func TestLiveContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("download url: %v", err)
 	}
-	body, err := client.Fetch(ctx, fileURL)
+	file, err := client.Fetch(ctx, fileURL)
 	if err != nil {
 		t.Fatalf("fetch file: %v", err)
 	}
-	header := make([]byte, 12)
-	_, err = io.ReadFull(body, header)
-	_ = body.Close()
-	if err != nil || !bytes.Equal(header[8:12], []byte(".FIT")) {
-		t.Fatalf("downloaded file is not a FIT file (header %q, err %v)", header, err)
+	if len(file) < 12 || !bytes.Equal(file[8:12], []byte(".FIT")) {
+		t.Fatalf("downloaded file is not a FIT file (%d bytes)", len(file))
 	}
 
 	if _, err := client.Login(ctx, liveEmail, livePassword); err != nil {
