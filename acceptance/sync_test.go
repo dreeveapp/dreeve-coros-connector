@@ -305,3 +305,13 @@ func TestActivityAwaitingRetryIsKeptWhenTheTimeZoneIsAheadOfCOROS(t *testing.T) 
 		t.Fatalf("activity awaiting a retry fell out of the window, got %v", keys(files))
 	}
 }
+
+func TestSinceIsIgnoredOnceStoredEvenWhenInvalid(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.mustRun("login")
+	w.mustRun("sync-once")
+
+	w.env["SINCE"] = "last month"
+
+	w.mustRun("sync-once")
+}

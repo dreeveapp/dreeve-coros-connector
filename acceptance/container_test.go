@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
@@ -44,12 +45,13 @@ func TestContainerSmoke(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	runArgs := func(command string) []string {
+	runArgs := func(command string, extra ...string) []string {
 		args := []string{"run", "--rm", "--read-only", "--user", smokeUser, "--add-host", "host.docker.internal:host-gateway",
 			"-e", "COROS_API_HOSTS=" + fake.HostsEnv(), "-e", "COROS_EMAIL=" + email, "-e", "COROS_PASSWORD=" + password}
 		for target, source := range volumes {
 			args = append(args, "-v", source+":"+target)
 		}
+		args = append(args, extra...)
 		return append(args, smokeImage, command)
 	}
 	docker(t, runArgs("login")...)
@@ -70,6 +72,31 @@ func TestContainerSmoke(t *testing.T) {
 			t.Fatalf("delivered file owned by uid %d, want 4242", uid)
 		}
 	}
+
+	container := strings.TrimSpace(docker(t, runArgs("run", "--detach", "-e", "POLL_INTERVAL_TESTING=1s",
+		"--health-interval=1s", "--health-timeout=5s", "--health-retries=1", "--health-start-period=0s")...))
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "--force", container).Run() })
+	awaitHealth(t, container, "healthy")
+
+	fake.RevokeTokens()
+	awaitHealth(t, container, "unhealthy")
+
+	docker(t, runArgs("login")...)
+	awaitHealth(t, container, "healthy")
+}
+
+func awaitHealth(t *testing.T, container, want string) {
+	t.Helper()
+	deadline := time.Now().Add(60 * time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		got = strings.TrimSpace(docker(t, "inspect", "--format", "{{.State.Health.Status}}", container))
+		if got == want {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	t.Fatalf("container health = %q, want %q\nlogs: %s", got, want, docker(t, "logs", container))
 }
 
 func docker(t *testing.T, args ...string) string {
