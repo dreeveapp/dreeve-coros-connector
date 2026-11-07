@@ -95,6 +95,8 @@ docker compose up -d
 
 See [`CLAUDE.md`](CLAUDE.md) for how to run each test level. Agent guidance is generated from `.rulesync/`; edit it there and run `npm ci --ignore-scripts && npx rulesync generate`.
 
+CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions and npm tooling up to date.
+
 ## License
 
 [AGPL-3.0](LICENSE)
