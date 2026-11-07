@@ -150,6 +150,7 @@ func (s *syncer) cycle(ctx context.Context, label string, stdout io.Writer) (map
 			return statusCounts(l), err
 		}
 		entry, err := deliver(ctx, s.client, session, s.paths.watch, a)
+		th.Downloaded()
 		if err != nil && ctx.Err() != nil {
 			return statusCounts(l), ctx.Err()
 		}

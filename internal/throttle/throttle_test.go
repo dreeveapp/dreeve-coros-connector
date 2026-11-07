@@ -44,6 +44,15 @@ func pace(t *testing.T, th *throttle.Throttle) {
 	}
 }
 
+func download(t *testing.T, th *throttle.Throttle, clock *fakeClock, took time.Duration) (time.Time, time.Time) {
+	t.Helper()
+	pace(t, th)
+	started := clock.Now()
+	clock.now = clock.now.Add(took)
+	th.Downloaded()
+	return started, clock.Now()
+}
+
 func TestFirstDownloadIsNotDelayed(t *testing.T) {
 	clock := newFakeClock()
 	th := newThrottle(clock, nil)
@@ -55,27 +64,26 @@ func TestFirstDownloadIsNotDelayed(t *testing.T) {
 	}
 }
 
-func TestConsecutiveDownloadsAreAtLeastTheDelayApart(t *testing.T) {
+func TestEachDownloadStartsAtLeastTheDelayAfterThePreviousOneEnded(t *testing.T) {
 	clock := newFakeClock()
 	th := newThrottle(clock, nil)
-	var starts []time.Time
-	for range 3 {
-		pace(t, th)
-		starts = append(starts, clock.Now())
-		clock.now = clock.now.Add(500 * time.Millisecond)
-	}
 
-	for i := 1; i < len(starts); i++ {
-		if gap := starts[i].Sub(starts[i-1]); gap != 2*time.Second {
-			t.Errorf("download %d started %v after the previous one, want 2s", i, gap)
-		}
+	_, firstEnded := download(t, th, clock, 1500*time.Millisecond)
+	secondStarted, secondEnded := download(t, th, clock, 300*time.Millisecond)
+	thirdStarted, _ := download(t, th, clock, 0)
+
+	if gap := secondStarted.Sub(firstEnded); gap != 2*time.Second {
+		t.Errorf("second download started %v after the first ended, want 2s", gap)
+	}
+	if gap := thirdStarted.Sub(secondEnded); gap != 2*time.Second {
+		t.Errorf("third download started %v after the second ended, want 2s", gap)
 	}
 }
 
 func TestDownloadAfterTheDelayHasElapsedIsNotDelayed(t *testing.T) {
 	clock := newFakeClock()
 	th := newThrottle(clock, nil)
-	pace(t, th)
+	download(t, th, clock, time.Second)
 	clock.now = clock.now.Add(5 * time.Second)
 
 	pace(t, th)
@@ -86,8 +94,9 @@ func TestDownloadAfterTheDelayHasElapsedIsNotDelayed(t *testing.T) {
 }
 
 func TestPaceStopsWhenTheContextIsCancelled(t *testing.T) {
-	th := throttle.New(throttle.Config{Delay: time.Hour, BaseBackoff: time.Minute, MaxBackoff: time.Hour}, nil)
-	pace(t, th)
+	clock := newFakeClock()
+	th := throttle.New(throttle.Config{Clock: clock, Delay: time.Hour, BaseBackoff: time.Minute, MaxBackoff: time.Hour}, nil)
+	download(t, th, clock, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 

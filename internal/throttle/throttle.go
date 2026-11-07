@@ -25,9 +25,9 @@ type Config struct {
 }
 
 type Throttle struct {
-	cfg          Config
-	backoff      *ledger.Backoff
-	lastDownload time.Time
+	cfg               Config
+	backoff           *ledger.Backoff
+	lastDownloadEnded time.Time
 }
 
 func New(cfg Config, backoff *ledger.Backoff) *Throttle {
@@ -43,8 +43,8 @@ func New(cfg Config, backoff *ledger.Backoff) *Throttle {
 }
 
 func (t *Throttle) Pace(ctx context.Context) error {
-	if !t.lastDownload.IsZero() {
-		if wait := t.lastDownload.Add(t.cfg.Delay).Sub(t.cfg.Clock.Now()); wait > 0 {
+	if !t.lastDownloadEnded.IsZero() {
+		if wait := t.lastDownloadEnded.Add(t.cfg.Delay).Sub(t.cfg.Clock.Now()); wait > 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -52,11 +52,11 @@ func (t *Throttle) Pace(ctx context.Context) error {
 			}
 		}
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	t.lastDownload = t.cfg.Clock.Now()
-	return nil
+	return ctx.Err()
+}
+
+func (t *Throttle) Downloaded() {
+	t.lastDownloadEnded = t.cfg.Clock.Now()
 }
 
 func (t *Throttle) BackingOff() (time.Time, bool) {
