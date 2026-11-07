@@ -27,7 +27,8 @@ A fixture must not let anyone identify the account. The script enforces this and
 - activity names: `Activity N`
 - activity metrics (heart rate, distance, pace, calories, power, ...): `0`
 - image URLs (route thumbnails): empty
-- timestamps: shifted by a constant so the latest activity starts on 2025-03-10
+- timestamps: the latest activity starts on 2025-03-10, each earlier one exactly a day before, each lasting one hour
+- `count` and `totalPage`: describe only the captured activities
 - `fileUrl`: `http://coros-files.test/<labelId>.fit`
 
 Review every file by hand before committing, especially fields the script does not know about.

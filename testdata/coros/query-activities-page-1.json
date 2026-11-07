@@ -1,7 +1,7 @@
 {
   "apiCode": "C33BB719",
   "data": {
-    "count": 67,
+    "count": 4,
     "dataList": [
       {
         "adjustedPace": 0,
@@ -28,7 +28,7 @@
         "downhillDesc": 0,
         "downhillDist": 0,
         "downhillTime": 0,
-        "endTime": 1741605999,
+        "endTime": 1741603600,
         "endTimezone": 0,
         "hasMessage": 0,
         "hasPodDistance": 0,
@@ -88,7 +88,7 @@
         "downhillDesc": 0,
         "downhillDist": 0,
         "downhillTime": 0,
-        "endTime": 1741545054,
+        "endTime": 1741517200,
         "endTimezone": 0,
         "hasMessage": 0,
         "hasPodDistance": 0,
@@ -108,7 +108,7 @@
         "sets": 0,
         "speedType": 0,
         "sportType": 900,
-        "startTime": 1741539133,
+        "startTime": 1741513600,
         "startTimezone": 0,
         "step": 0,
         "subMode": 1,
@@ -125,7 +125,7 @@
       }
     ],
     "pageNumber": 1,
-    "totalPage": 34
+    "totalPage": 2
   },
   "message": "OK",
   "result": "0000"

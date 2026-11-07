@@ -60,7 +60,7 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 	}
 	slices.SortStableFunc(activities, func(a, b coros.Activity) int { return cmp.Compare(a.StartTime, b.StartTime) })
 
-	var delivered, noFile int
+	var delivered, retry int
 	for _, a := range activities {
 		if l.Has(a.LabelID) {
 			continue
@@ -70,6 +70,12 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 			continue
 		}
 		entry, err := deliver(ctx, client, session, p.watch, a)
+		var resultErr *coros.ResultError
+		if errors.As(err, &resultErr) {
+			retry++
+			_, _ = fmt.Fprintf(stdout, "no file yet for activity %s (%s): COROS result %s %q, will retry next run\n", a.LabelID, a.Name, resultErr.Code, resultErr.Message)
+			continue
+		}
 		if err != nil {
 			return explainTokenError(err, tok)
 		}
@@ -77,31 +83,20 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		if err := l.Save(p.ledgerFile()); err != nil {
 			return err
 		}
-		switch entry.Status {
-		case ledger.Delivered:
-			delivered++
-			_, _ = fmt.Fprintf(stdout, "delivered %s (%s)\n", entry.File, a.Name)
-		case ledger.NoFile:
-			noFile++
-			_, _ = fmt.Fprintf(stdout, "no file for activity %s (%s), COROS result %s\n", a.LabelID, a.Name, entry.ResultCode)
-		}
+		delivered++
+		_, _ = fmt.Fprintf(stdout, "delivered %s (%s)\n", entry.File, a.Name)
 	}
 
 	l.LastSync = today.Format(time.DateOnly)
 	if err := l.Save(p.ledgerFile()); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "sync-once: %d listed since %s, %d delivered, %d without file\n", len(activities), from.Format(time.DateOnly), delivered, noFile)
+	_, _ = fmt.Fprintf(stdout, "sync-once: %d listed since %s, %d delivered, %d to retry\n", len(activities), from.Format(time.DateOnly), delivered, retry)
 	return nil
 }
 
 func deliver(ctx context.Context, client *coros.Client, session *coros.Session, watchDir string, a coros.Activity) (ledger.Entry, error) {
-	now := time.Now().UTC().Format(time.RFC3339)
 	fileURL, err := session.DownloadURL(ctx, a)
-	var resultErr *coros.ResultError
-	if errors.As(err, &resultErr) {
-		return ledger.Entry{Status: ledger.NoFile, SportType: a.SportType, Name: a.Name, ResultCode: resultErr.Code, At: now}, nil
-	}
 	if err != nil {
 		return ledger.Entry{}, err
 	}
@@ -115,7 +110,7 @@ func deliver(ctx context.Context, client *coros.Client, session *coros.Session, 
 	if err := atomicfile.Write(watchDir, "."+name+".part", name, 0o644, body); err != nil {
 		return ledger.Entry{}, fmt.Errorf("deliver activity %s: %w", a.LabelID, err)
 	}
-	return ledger.Entry{Status: ledger.Delivered, SportType: a.SportType, Name: a.Name, File: name, At: now}, nil
+	return ledger.Entry{Status: ledger.Delivered, SportType: a.SportType, Name: a.Name, File: name, At: time.Now().UTC().Format(time.RFC3339)}, nil
 }
 
 func windowStart(l *ledger.Ledger, today time.Time, lookback int) (time.Time, error) {

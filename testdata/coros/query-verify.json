@@ -1,7 +1,7 @@
 {
   "apiCode": "C33BB719",
   "data": {
-    "count": 67,
+    "count": 4,
     "dataList": [
       {
         "adjustedPace": 0,
@@ -28,7 +28,7 @@
         "downhillDesc": 0,
         "downhillDist": 0,
         "downhillTime": 0,
-        "endTime": 1741605999,
+        "endTime": 1741603600,
         "endTimezone": 0,
         "hasMessage": 0,
         "hasPodDistance": 0,
@@ -65,7 +65,7 @@
       }
     ],
     "pageNumber": 1,
-    "totalPage": 67
+    "totalPage": 4
   },
   "message": "OK",
   "result": "0000"

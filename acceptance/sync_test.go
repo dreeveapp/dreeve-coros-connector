@@ -158,18 +158,26 @@ func TestAbsoluteSinceIsHonouredOnTheFirstRun(t *testing.T) {
 	}
 }
 
-func TestActivityWithoutFileIsRecordedAsNoFile(t *testing.T) {
+func TestUnexpectedDownloadResultIsReportedAndRetriedOnTheNextRun(t *testing.T) {
 	w := newWorld(t, 1, 1)
 	w.addActivity("900000000000000002", 1, withoutFile)
 	w.mustRun("login")
 
-	w.mustRun("sync-once")
+	r := w.mustRun("sync-once")
 
+	assertContains(t, r.stdout, "900000000000000002", "9999")
 	if files := w.watchFiles(); len(files) != 0 {
 		t.Fatalf("expected nothing delivered, got %v", keys(files))
 	}
-	if e := w.ledger().Activities["900000000000000002"]; e.Status != "no-file" || e.ResultCode != "9999" {
-		t.Fatalf("ledger entry = %+v", e)
+	if _, ok := w.ledger().Activities["900000000000000002"]; ok {
+		t.Fatal("activity with an unexpected download result was recorded")
+	}
+
+	available := w.addActivity("900000000000000002", 1)
+	w.mustRun("sync-once")
+
+	if files := w.watchFiles(); string(files["coros_900000000000000002.fit"]) != string(available.Content) {
+		t.Fatalf("activity was not retried, got %v", keys(files))
 	}
 }
 

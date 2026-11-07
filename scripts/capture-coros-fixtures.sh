@@ -169,16 +169,26 @@ walk(
         else .value = null end
       )
       | .name = "Activity \(.labelId[-4:] | tonumber - 1)"
+      | .startTime = (1741600000 - ((.labelId[-4:] | tonumber) - 2) * 86400)
+      | .endTime = (.startTime + 3600)
+      | .date = (.startTime | day)
       | .device = "COROS Watch"
       | .deviceId = "A00000"
     )
+  else . end
+| if (.data | type) == "object" and (.data | has("totalPage")) and .data.totalPage > 0 then
+    ((.data.count / .data.totalPage) | ceil) as $size
+    | (.data.pageNumber > .data.totalPage) as $past
+    | .data.count = $total
+    | .data.totalPage = (($total / $size) | ceil)
+    | if $past then .data.pageNumber = .data.totalPage + 1 else . end
   else . end
 '
 
 mapped_label="$(jq -r --arg id "$label_id" '.[$id]' "$label_map")"
 for name in login-bad-credentials login query-verify query-wrong-region query-activities-page-1 query-activities-page-2 query-activities-past-last-page download-fit download-no-file query-token-revoked; do
   [[ -f "$raw/$name.json" ]] || continue
-  jq --slurpfile map "$label_map" --argjson shift "$shift_by" --arg label "$mapped_label" "$redact" "$raw/$name.json" >"$out/$name.json"
+  jq --slurpfile map "$label_map" --argjson shift "$shift_by" --argjson total "$(jq 'length' "$label_map")" --arg label "$mapped_label" "$redact" "$raw/$name.json" >"$out/$name.json"
 done
 
 jq -R -s 'split("\n") | map(select(length > 0) | split("\t")) | map({key: .[0], value: {status: (.[1] | tonumber), contentType: .[2]}}) | from_entries' \
