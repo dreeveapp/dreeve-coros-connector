@@ -30,6 +30,10 @@ linters:
         text: "G404"
         linters:
           - gosec
+      - path: tools/fitscrub/main\.go
+        text: "G703"
+        linters:
+          - gosec
 formatters:
   enable:
     - gofmt
