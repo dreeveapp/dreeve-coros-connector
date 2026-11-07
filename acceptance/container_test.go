@@ -23,9 +23,9 @@ func TestContainerSmoke(t *testing.T) {
 	if os.Getenv("CONTAINER_SMOKE") != "1" {
 		t.Skip("set CONTAINER_SMOKE=1 to build and run the image")
 	}
-	docker(t, "build", "-t", smokeImage, "..")
+	image := smokeImageUnderTest(t)
 
-	if user := strings.TrimSpace(docker(t, "image", "inspect", "--format", "{{.Config.User}}", smokeImage)); user == "" || user == "root" || user == "0" {
+	if user := strings.TrimSpace(docker(t, "image", "inspect", "--format", "{{.Config.User}}", image)); user == "" || user == "root" || user == "0" {
 		t.Fatalf("image runs as %q, want a non-root default user", user)
 	}
 
@@ -52,7 +52,7 @@ func TestContainerSmoke(t *testing.T) {
 			args = append(args, "-v", source+":"+target)
 		}
 		args = append(args, extra...)
-		return append(args, smokeImage, command)
+		return append(args, image, command)
 	}
 	docker(t, runArgs("login")...)
 	docker(t, runArgs("sync-once")...)
@@ -83,6 +83,20 @@ func TestContainerSmoke(t *testing.T) {
 
 	docker(t, runArgs("login")...)
 	awaitHealth(t, container, "healthy")
+}
+
+func smokeImageUnderTest(t *testing.T) string {
+	t.Helper()
+	image := os.Getenv("CONTAINER_SMOKE_IMAGE")
+	if image == "" {
+		docker(t, "build", "-t", smokeImage, "..")
+		return smokeImage
+	}
+	docker(t, "pull", image)
+	if arch := strings.TrimSpace(docker(t, "image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", image)); arch != "linux/"+runtime.GOARCH {
+		t.Fatalf("pulled %s for %s, want linux/%s", image, arch, runtime.GOARCH)
+	}
+	return image
 }
 
 func awaitHealth(t *testing.T, container, want string) {

@@ -45,6 +45,7 @@ Flags:
 | `-home-region` | `-region` | region whose host accepts the token; set it different from `-region` to reproduce a wrong-region login |
 | `-addr` | `127.0.0.1:18080` | listen address |
 | `-advertise` | | host name the connector uses to reach the fake, for the container run |
+| `-fit` | | FIT file served for every activity, e.g. `testdata/fit/coros-outdoor-run.fit`, when Dreeve must import the delivered file |
 
 Wait until `fake.env` contains `COROS_PASSWORD` before continuing.
 

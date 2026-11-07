@@ -34,6 +34,8 @@ actionlint and govulncheck are pinned by `package-lock.json` and `go.mod`. Match
 
 Add a new job to the `needs` of `CI gate`.
 
+The release workflow (`.github/workflows/release.yml`) is the only one with write permissions: `packages: write` to push, `id-token: write` and `attestations: write` to attest, `contents: write` to create the release, each on the job that needs it. It uses no cache, so a poisoned cache cannot reach a published image.
+
 ## Renovate
 
 `renovate.json` updates Go modules (including the `go` directive and `go tool` dependencies), the Dockerfile base images, the actions and the tool versions in their `with:` inputs, and the npm tooling. Renovate's `actions.lock` support is experimental: if a Renovate PR fails the `actions-lock` job, regenerate the lockfile on its branch with `gh actions-lock` and review the diff. For an action, Renovate rewrites the tag and regenerates `actions.lock` with the `gh-actions-lock` version set in `constraints.ghActionsLock`; a custom manager keeps that version and the one CI installs in step.
