@@ -24,7 +24,7 @@ func TestSaveThenLoadRoundTrips(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ledger.json")
 	l := ledger.New()
 	l.Since = "2026-10-08"
-	l.LastSync = "2026-11-07"
+	l.CompleteUntil = "2026-11-07"
 	l.Record("900000000000000002", ledger.Entry{Status: ledger.Delivered, SportType: 101, File: "coros_900000000000000002.fit"})
 	l.Record("900000000000000003", ledger.Entry{Status: ledger.NoFile, SportType: 900, ResultCode: "1001"})
 
@@ -59,17 +59,17 @@ func TestSaveLeavesNoTemporaryFiles(t *testing.T) {
 
 func TestParseRejectsCorruptLedgers(t *testing.T) {
 	cases := map[string]string{
-		"empty":            ``,
-		"truncated":        `{"version":1,"since":"2026-10-08","activities":{`,
-		"not an object":    `[]`,
-		"null":             `null`,
-		"missing version":  `{"since":"2026-10-08","activities":{}}`,
-		"unknown version":  `{"version":2,"since":"2026-10-08","activities":{}}`,
-		"bad since":        `{"version":1,"since":"yesterday","activities":{}}`,
-		"bad lastSync":     `{"version":1,"since":"2026-10-08","lastSync":"soon","activities":{}}`,
-		"unknown status":   `{"version":1,"since":"2026-10-08","activities":{"1":{"status":"lost"}}}`,
-		"trailing garbage": `{"version":1,"since":"2026-10-08","activities":{}} {}`,
-		"unknown field":    `{"version":1,"since":"2026-10-08","activities":{},"extra":true}`,
+		"empty":             ``,
+		"truncated":         `{"version":1,"since":"2026-10-08","activities":{`,
+		"not an object":     `[]`,
+		"null":              `null`,
+		"missing version":   `{"since":"2026-10-08","activities":{}}`,
+		"unknown version":   `{"version":2,"since":"2026-10-08","activities":{}}`,
+		"bad since":         `{"version":1,"since":"yesterday","activities":{}}`,
+		"bad completeUntil": `{"version":1,"since":"2026-10-08","completeUntil":"soon","activities":{}}`,
+		"unknown status":    `{"version":1,"since":"2026-10-08","activities":{"1":{"status":"lost"}}}`,
+		"trailing garbage":  `{"version":1,"since":"2026-10-08","activities":{}} {}`,
+		"unknown field":     `{"version":1,"since":"2026-10-08","activities":{},"extra":true}`,
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {

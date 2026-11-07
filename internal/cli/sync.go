@@ -74,7 +74,7 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		var resultErr *coros.ResultError
 		if errors.As(err, &resultErr) {
 			retry++
-			if day := startOfDay(time.Unix(a.StartTime, 0).In(zone)); day.Before(completeUntil) {
+			if day := startOfDay(time.Unix(a.StartTime, 0).In(zone)).AddDate(0, 0, -1); day.Before(completeUntil) {
 				completeUntil = day
 			}
 			_, _ = fmt.Fprintf(stdout, "no file yet for activity %s (%s): COROS result %s %q, will retry next run\n", a.LabelID, a.Name, resultErr.Code, resultErr.Message)
@@ -91,7 +91,7 @@ func syncOnce(ctx context.Context, getenv Env, stdout io.Writer) error {
 		_, _ = fmt.Fprintf(stdout, "delivered %s (%s)\n", entry.File, a.Name)
 	}
 
-	l.LastSync = completeUntil.Format(time.DateOnly)
+	l.CompleteUntil = completeUntil.Format(time.DateOnly)
 	if err := l.Save(p.ledgerFile()); err != nil {
 		return err
 	}
@@ -122,16 +122,16 @@ func windowStart(l *ledger.Ledger, today time.Time, lookback int) (time.Time, er
 	if err != nil {
 		return time.Time{}, err
 	}
-	if l.LastSync == "" {
+	if l.CompleteUntil == "" {
 		return since, nil
 	}
-	lastSync, err := time.ParseInLocation(time.DateOnly, l.LastSync, today.Location())
+	completeUntil, err := time.ParseInLocation(time.DateOnly, l.CompleteUntil, today.Location())
 	if err != nil {
 		return time.Time{}, err
 	}
 	from := today.AddDate(0, 0, -lookback)
-	if lastSync.Before(from) {
-		from = lastSync
+	if completeUntil.Before(from) {
+		from = completeUntil
 	}
 	if from.Before(since) {
 		from = since

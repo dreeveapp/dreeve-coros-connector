@@ -33,10 +33,10 @@ type Entry struct {
 }
 
 type Ledger struct {
-	Version    int              `json:"version"`
-	Since      string           `json:"since"`
-	LastSync   string           `json:"lastSync,omitempty"`
-	Activities map[string]Entry `json:"activities"`
+	Version       int              `json:"version"`
+	Since         string           `json:"since"`
+	CompleteUntil string           `json:"completeUntil,omitempty"`
+	Activities    map[string]Entry `json:"activities"`
 }
 
 func New() *Ledger {
@@ -66,7 +66,7 @@ func Parse(data []byte) (*Ledger, error) {
 	if l.Version != currentVersion {
 		return nil, fmt.Errorf("unsupported ledger version %d", l.Version)
 	}
-	for field, value := range map[string]string{"since": l.Since, "lastSync": l.LastSync} {
+	for field, value := range map[string]string{"since": l.Since, "completeUntil": l.CompleteUntil} {
 		if value == "" {
 			continue
 		}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
 
 func TestLoginPersistsTheTokenPrivately(t *testing.T) {
@@ -215,7 +217,7 @@ func TestNextRunCoversTheGapSinceTheLastCompletedSync(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatal(err)
 	}
-	doc["lastSync"] = time.Now().UTC().AddDate(0, 0, -20).Format(time.DateOnly)
+	doc["completeUntil"] = time.Now().UTC().AddDate(0, 0, -20).Format(time.DateOnly)
 	data, err = json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -283,6 +285,23 @@ func TestActivityAwaitingRetryStaysInTheWindowBeyondTheLookback(t *testing.T) {
 	w.mustRun("sync-once")
 
 	if files := w.watchFiles(); string(files["coros_900000000000000002.fit"]) != string(available.Content) {
+		t.Fatalf("activity awaiting a retry fell out of the window, got %v", keys(files))
+	}
+}
+
+func TestActivityAwaitingRetryIsKeptWhenTheTimeZoneIsAheadOfCOROS(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.env["TZ"] = "Pacific/Kiritimati"
+	y, m, d := time.Now().UTC().AddDate(0, 0, -15).Date()
+	lateEvening := time.Date(y, m, d, 20, 0, 0, 0, time.UTC)
+	w.addActivity("900000000000000002", 0, withoutFile, func(a *fakecoros.Activity) { a.Start = lateEvening })
+	w.mustRun("login")
+	w.mustRun("sync-once")
+
+	w.addActivity("900000000000000002", 0, func(a *fakecoros.Activity) { a.Start = lateEvening })
+	w.mustRun("sync-once")
+
+	if files := w.watchFiles(); files["coros_900000000000000002.fit"] == nil {
 		t.Fatalf("activity awaiting a retry fell out of the window, got %v", keys(files))
 	}
 }
