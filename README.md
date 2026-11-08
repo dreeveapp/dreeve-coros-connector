@@ -124,7 +124,7 @@ No new `login` is needed and no activity is delivered twice. Read the [release n
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 
