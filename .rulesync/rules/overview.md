@@ -11,28 +11,22 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 
 ## Layout
 
-- `cmd/dreeve-coros-connector`: binary entry point
-- `internal/cli`: subcommands (`login`, `sync-once`, `run`, `healthcheck`), configuration from environment variables, token store
-- `internal/daemon`: the `run` schedule (interval with ±10% jitter, injectable clock) and the `/healthz` and `/status` handler
-- `internal/coros`: COROS API client
-- `internal/ledger`: `/state/ledger.json` contract
-- `internal/logging`: the slog logger behind `LOG_LEVEL` and `LOG_FORMAT`; it redacts registered secrets (password, token) and secret-named fields from every record
-- `internal/throttle`: download pacing and the backoff after an HTTP 429 (injectable clock); the backoff is stored in the ledger so it survives restarts
-- `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`, injects faults (429, 5xx, truncated or stalled bodies) and logs every request it receives
-- `acceptance`: black-box tests that build and drive the binary
-- `tools/fakecoros`: dev-only fake COROS server for running the connector by hand (see the `run-app` skill); never shipped in the image
-- `internal/fit`: walks the records of a raw FIT file, validates its headers and CRCs, and rewrites them after an in-place edit or an append; `fittitle` and `fitscrub` build on it so neither re-encodes a file
-- `internal/fittitle`: appends a `workout` message holding the COROS title to a downloaded FIT file without re-encoding it (`WRITE_TITLE`)
-- `internal/fitscrub`, `tools/fitscrub`: dev-only FIT anonymiser for the golden files in `testdata/fit/` (see the fixtures rule); never shipped in the image
+Package names say what each holds. What they don't say:
+
+- `internal/ledger`: `/state/ledger.json` is a contract; it also stores the 429 backoff so it survives restarts
+- `internal/atomicfile`: the only way the connector writes a file it keeps
+- `internal/fit`: walks, validates and reseals raw FIT bytes; `fittitle` and `fitscrub` build on it so neither ever re-encodes a file
+- `internal/fakecoros`: test fake that replays `testdata/coros/` and injects faults
+- `tools/fakecoros`, `tools/fitscrub`, `internal/fitscrub`: dev-only, never shipped in the image
 
 ## Rules
 
 - Write no comments in code, including test files. Names and tests carry the meaning; rationale goes in the PR description.
-- Work test-first: write a failing test through a public surface, make it pass, refactor.
+- Work test-first: write a test through a public surface, watch it fail, make it pass.
 - Pin every dependency to an exact version: Go modules, npm devDependencies, container images by digest, GitHub Actions by full semver tag locked in `.github/workflows/actions.lock` (see the supply-chain rule).
-- Never log or persist the COROS password. Only `login` reads it. Log through the app's `*slog.Logger` only, never `fmt` to stdout or stderr (the usage text and the `login` prompts on stderr are the only exceptions), and register any new secret with `Secrets.Add` as soon as it is read.
+- Never log or persist the COROS password. Only `login` reads it. Log through the app's `*slog.Logger` only, never `fmt` to stdout or stderr (the usage text, `version` and the `login` prompts are the only exceptions), and register any new secret with `Secrets.Add` as soon as it is read.
 - Write every file the connector keeps (FIT files, the ledger, the token) only through `internal/atomicfile` with a mode passed through the app's `umask`, so `UMASK` applies to it. The boot write probe, created and removed at once, is the only exception.
-- Every COROS login revokes every other token on the account. Never add code or tests that log in against the real API outside the live contract check.
+- Every COROS login revokes every other token on the account, Training Hub included. Never add code or tests that log in against the real API outside the live contract check.
 - Agent guidance lives in `.rulesync/`. Edit it there, run `npm ci --ignore-scripts && npx rulesync generate`, and commit the generated files.
 
 ## Running the tests
@@ -41,17 +35,14 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 | --- | --- |
 | Unit, contract and acceptance | `go test ./...` |
 | Race | `go test -race ./...` |
-| Fuzz | `go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/ledger`, `go test -run '^$' -fuzz FuzzWrite -fuzztime 30s ./internal/fittitle` |
+| Fuzz | `go test -run '^$' -fuzz <FuzzParse\|FuzzScrub\|FuzzWrite> -fuzztime 30s ./internal/<ledger\|fitscrub\|fittitle>` |
 | Dreeve oracle | `DREEVE_ORACLE=1 go test -count=1 -run TestDreeveOracle ./acceptance` |
-| Container smoke | `CONTAINER_SMOKE=1 go test -count=1 -run TestContainerSmoke ./acceptance` |
-| Container smoke on a pushed image | `CONTAINER_SMOKE=1 CONTAINER_SMOKE_IMAGE=ghcr.io/...@sha256:... go test -count=1 -run TestContainerSmoke ./acceptance` |
+| Container smoke | `CONTAINER_SMOKE=1 go test -count=1 -run TestContainerSmoke ./acceptance`; add `CONTAINER_SMOKE_IMAGE=ghcr.io/...@sha256:...` to test a pushed image |
 | Live contract (local only, never CI) | `COROS_EMAIL=... COROS_PASSWORD=... go test -tags live -count=1 -run TestLiveContract ./internal/coros` |
 | Lint | `golangci-lint run ./...` |
 | Vulnerabilities | `go tool govulncheck ./...` |
 | Workflows | `npx --no-install actionlint`, `zizmor .`, `gh actions-lock --verify` |
 
-The live contract check logs in to the real COROS API, which signs out Training Hub and every running connector on that account.
-
 ## Releasing
 
-A `vX.Y.Z` tag runs `.github/workflows/release.yml`, which tags, attests and releases an image only after the container smoke passed on it on both architectures. `RELEASING.md` holds the pre-release checklist, including the end-to-end run with Dreeve. Keep the README's compose example runnable as-is: that run pastes it unchanged.
+Follow `RELEASING.md`. Keep the README's compose example runnable as-is: the end-to-end release run pastes it unchanged.
