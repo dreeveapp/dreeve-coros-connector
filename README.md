@@ -21,6 +21,8 @@ Add the connector next to the `app` and `daemon` services in [Dreeve's `docker-c
       - ./watch:/watch
       - ./coros/state:/state
       - ./coros/tokens:/tokens
+    networks:
+      - dreeve-network
 ```
 
 `user:` must be able to write to the three folders. Use your own uid and gid (`id -u`, `id -g`), or Dreeve's `PUID` and `PGID` if you set them. Create the folders and give them to that user before the first start, since Docker would otherwise create them owned by root:
@@ -44,7 +46,7 @@ Activities appear in `./watch` and Dreeve's daemon imports them on its next run.
 > [!WARNING]
 > Logging in signs out every other COROS session on the account, including COROS Training Hub and any other connector. The mobile app is not affected.
 
-`login` reads `COROS_EMAIL` and `COROS_PASSWORD`, or their `_FILE` variants, and prompts in a terminal for whatever is missing. The password is never logged or saved. If COROS reports a region the connector does not know, set `COROS_REGION`. With Docker secrets:
+`login` reads `COROS_EMAIL` and `COROS_PASSWORD`, or their `_FILE` variants, and prompts in a terminal for whatever is missing. Without a terminal, as in a script, drop `-it` and set both, or `login` exits with an error. The password is never logged or saved. If COROS reports a region the connector does not know, set `COROS_REGION`. With Docker secrets:
 
 ```yaml
 services:
