@@ -11,13 +11,7 @@ globs: ["testdata/coros/**", "testdata/fit/**", "testdata/dreeve/**", "scripts/c
 
 ## Recording
 
-Only a human with a COROS account can record fixtures. Run:
-
-```
-./scripts/capture-coros-fixtures.sh
-```
-
-It prompts for the email and password (or reads `COROS_EMAIL` and `COROS_PASSWORD`), logs in three times, and writes redacted fixtures. The logins sign out Training Hub and every running connector on that account. Set `MANUAL_LABEL_ID` and `MANUAL_SPORT_TYPE` to also record the download response for an activity without a file.
+Only a human with a COROS account can record fixtures, with `./scripts/capture-coros-fixtures.sh`; its logins sign out Training Hub. Ask for a recording rather than writing a response by hand.
 
 ## Redaction
 
@@ -49,13 +43,7 @@ Never commit a raw export. Scrub it first:
 go run ./tools/fitscrub -origin 48.8584,2.2945 raw.fit testdata/fit/coros-<activity>.fit
 ```
 
-`fitscrub` patches values in place and recomputes the CRCs, so every other byte stays as COROS served it. It never re-encodes the file:
-
-- positions (every `semicircles` field): translated so the first position lands on the origin, keeping the track's shape; missing positions stay missing
-- `serial_number` fields: a fixed placeholder
-- `user_profile`: every field cleared
-
-It refuses a file that is truncated, fails its CRC, or does not decode. It does not touch developer fields: check their names in the `field_description` messages and that none holds a position before committing. Timestamps, heart rate and the device model stay as recorded.
+`fitscrub` patches positions, serial numbers and `user_profile` in place and recomputes the CRCs; it never re-encodes the file. It does not touch developer fields: check their names in the `field_description` messages and that none holds a position before committing.
 
 ### Adding a golden file
 

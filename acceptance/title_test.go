@@ -4,13 +4,10 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/muktihari/fit/decoder"
-	"github.com/muktihari/fit/encoder"
-	"github.com/muktihari/fit/profile/factory"
-	"github.com/muktihari/fit/profile/typedef"
-	"github.com/muktihari/fit/profile/untyped/fieldnum"
 	"github.com/muktihari/fit/profile/untyped/mesgnum"
 	"github.com/muktihari/fit/proto"
 
@@ -64,19 +61,42 @@ func TestSyncOnceDeliversAFileWithAWorkoutUntouched(t *testing.T) {
 	assertContains(t, r.stderr, "already has a workout", a.LabelID)
 }
 
-func TestSyncOnceDeliversAFileItCannotTitleUntouchedAndWarns(t *testing.T) {
-	w := newWorld(t, 1, 1)
-	a := w.addActivity(labelID(0), 1, withContent([]byte("an HTML error page")))
-	w.mustRun("login")
-
-	r := w.mustRun("sync-once")
-
-	if got := w.watchFiles()["coros_"+a.LabelID+".fit"]; string(got) != "an HTML error page" {
-		t.Fatalf("delivered %q, want what COROS served", got)
+func TestSyncOnceNeverDeliversAFileThatIsNotAValidFIT(t *testing.T) {
+	golden := goldenFIT(t, "coros-outdoor-run.fit")
+	badCRC := bytes.Clone(golden)
+	badCRC[len(badCRC)-1] ^= 0xff
+	contents := map[string]struct {
+		served []byte
+		reason string
+	}{
+		"an HTML error page": {[]byte("<html>Service Unavailable</html>"), "not a FIT file"},
+		"a truncated file":   {golden[:len(golden)/2], "truncated FIT file"},
+		"a wrong checksum":   {badCRC, "checksum mismatch"},
 	}
-	assertContains(t, r.stderr, "WARN", "title not written", a.LabelID, "not a FIT file")
-	if e := w.ledger().Activities[a.LabelID]; e.Status != "delivered" {
-		t.Fatalf("ledger status = %q, want delivered", e.Status)
+	for name, c := range contents {
+		for _, writeTitle := range []string{"true", "false"} {
+			t.Run(name+" with WRITE_TITLE="+writeTitle, func(t *testing.T) {
+				w := newWorld(t, 1, 1)
+				w.env["WRITE_TITLE"] = writeTitle
+				w.env["MAX_ATTEMPTS"] = "2"
+				a := w.addActivity(labelID(0), 1, withContent(c.served))
+				w.mustRun("login")
+
+				w.mustRun("sync-once")
+
+				w.assertNoFileInWatch()
+				if e := w.ledger().Activities[a.LabelID]; e.Status != "pending" || e.Attempts != 1 || !strings.Contains(e.Error, c.reason) {
+					t.Fatalf("after the first attempt, ledger entry = %+v, want pending with %q", e, c.reason)
+				}
+
+				w.mustRun("sync-once")
+
+				w.assertNoFileInWatch()
+				if e := w.ledger().Activities[a.LabelID]; e.Status != "failed" {
+					t.Fatalf("after the last attempt, ledger entry = %+v, want failed", e)
+				}
+			})
+		}
 	}
 }
 
@@ -122,29 +142,6 @@ func goldenFIT(t *testing.T, name string) []byte {
 		t.Fatal(err)
 	}
 	return data
-}
-
-func fitWithWorkout(t *testing.T, name string) []byte {
-	t.Helper()
-	field := factory.CreateField
-	fit := &proto.FIT{Messages: []proto.Message{
-		{Num: mesgnum.FileId, Fields: []proto.Field{
-			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileActivity.Byte()),
-			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
-		}},
-		{Num: mesgnum.Workout, Fields: []proto.Field{
-			field(mesgnum.Workout, fieldnum.WorkoutWktName).WithValue(name),
-		}},
-		{Num: mesgnum.Record, Fields: []proto.Field{
-			field(mesgnum.Record, fieldnum.RecordTimestamp).WithValue(uint32(1100000001)),
-			field(mesgnum.Record, fieldnum.RecordHeartRate).WithValue(uint8(120)),
-		}},
-	}}
-	var buf bytes.Buffer
-	if err := encoder.New(&buf).Encode(fit); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
 }
 
 func strictDecode(t *testing.T, b []byte) []*proto.FIT {

@@ -231,3 +231,72 @@ func TestRejectedCredentialsWithCorosRegionMentionTheRegion(t *testing.T) {
 	assertContains(t, r.stderr, "email or password", "COROS_REGION=eu")
 	w.assertNothingSaved()
 }
+
+func TestLoginRetriesATransientVerifyFailure(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.ServerError)
+
+	r := w.mustRun("login")
+
+	w.savedToken()
+	if logins := len(w.loginRegions()); logins != 1 {
+		t.Errorf("logged in %d times, want 1", logins)
+	}
+	if strings.Contains(r.stderr, "not verified") {
+		t.Errorf("warned about a token that a retry verified:\n%s", r.stderr)
+	}
+}
+
+func TestLoginKeepsTheTokenWhenVerifyKeepsFailingTransiently(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.ServerError, fakecoros.ServerError, fakecoros.ServerError)
+
+	r := w.mustRun("login")
+
+	w.savedToken()
+	assertContains(t, r.stderr, "not verified", "HTTP 5")
+	w.mustRun("sync-once")
+}
+
+func TestLoginStillDiscardsATokenTheHomeRegionRejects(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.ServerError)
+	w.env["COROS_REGION"] = "eu"
+
+	r := w.run("login")
+
+	if r.code == 0 {
+		t.Fatal("expected a non-zero exit")
+	}
+	assertContains(t, r.stderr, "COROS_REGION", "rejected")
+	w.assertNothingSaved()
+}
+
+func TestLoginKeepsTheTokenWithoutRetryingANonTransientVerifyFailure(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.ClientError)
+
+	r := w.mustRun("login")
+
+	w.savedToken()
+	assertContains(t, r.stderr, "not verified", "HTTP 400")
+	if queries := w.fake.RequestsTo(fakecoros.Query, ""); queries != 1 {
+		t.Fatalf("verified %d times, want 1: a client error is not worth retrying", queries)
+	}
+}
+
+func TestLoginRetriesAVerifyTimeout(t *testing.T) {
+	w := newWorld(t, 1, 1)
+	w.env["HTTP_TIMEOUT_TESTING"] = "300ms"
+	w.fake.InjectFaults(fakecoros.Query, fakecoros.Stall)
+
+	r := w.mustRun("login")
+
+	w.savedToken()
+	if queries := w.fake.RequestsTo(fakecoros.Query, ""); queries != 2 {
+		t.Fatalf("verified %d times, want a retry after the timeout", queries)
+	}
+	if strings.Contains(r.stderr, "not verified") {
+		t.Errorf("warned about a token that a retry verified:\n%s", r.stderr)
+	}
+}

@@ -12,6 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/profile/factory"
+	"github.com/muktihari/fit/profile/typedef"
+	"github.com/muktihari/fit/profile/untyped/fieldnum"
+	"github.com/muktihari/fit/profile/untyped/mesgnum"
+	"github.com/muktihari/fit/proto"
+
 	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
 
@@ -19,6 +26,8 @@ const (
 	email    = "runner@example.com"
 	password = "correct horse"
 )
+
+const builtVersion = "1.2.3-acceptance"
 
 var binary string
 
@@ -29,7 +38,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	binary = filepath.Join(dir, "dreeve-coros-connector")
-	build := exec.Command("go", "build", "-o", binary, "../cmd/dreeve-coros-connector")
+	build := exec.Command("go", "build", "-ldflags", "-X github.com/xballoy/dreeve-coros-connector/internal/cli.version="+builtVersion, "-o", binary, "../cmd/dreeve-coros-connector")
 	build.Stdout, build.Stderr = os.Stdout, os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "build binary:", err)
@@ -101,8 +110,7 @@ func (w *world) run(args ...string) result {
 		w.t.Fatalf("%v did not exit within 30s\nstdout: %s\nstderr: %s", args, stdout.String(), stderr.String())
 	}
 	code := 0
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		code = exitErr.ExitCode()
 	} else if err != nil {
 		w.t.Fatalf("run %v: %v", args, err)
@@ -125,7 +133,7 @@ func (w *world) addActivity(labelID string, daysAgo int, opts ...func(*fakecoros
 		SportType: 100,
 		Name:      "Run " + labelID,
 		Start:     nowMinusDays(daysAgo),
-		Content:   []byte("FIT content of " + labelID),
+		Content:   fitWithWorkout(w.t, "Planned "+labelID),
 	}
 	for _, opt := range opts {
 		opt(&a)
@@ -217,4 +225,27 @@ func assertContains(t *testing.T, haystack string, needles ...string) {
 
 func nowMinusDays(days int) time.Time {
 	return time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour)
+}
+
+func fitWithWorkout(t *testing.T, name string) []byte {
+	t.Helper()
+	field := factory.CreateField
+	fit := &proto.FIT{Messages: []proto.Message{
+		{Num: mesgnum.FileId, Fields: []proto.Field{
+			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileActivity.Byte()),
+			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
+		}},
+		{Num: mesgnum.Workout, Fields: []proto.Field{
+			field(mesgnum.Workout, fieldnum.WorkoutWktName).WithValue(name),
+		}},
+		{Num: mesgnum.Record, Fields: []proto.Field{
+			field(mesgnum.Record, fieldnum.RecordTimestamp).WithValue(uint32(1100000001)),
+			field(mesgnum.Record, fieldnum.RecordHeartRate).WithValue(uint8(120)),
+		}},
+	}}
+	var buf bytes.Buffer
+	if err := encoder.New(&buf).Encode(fit); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

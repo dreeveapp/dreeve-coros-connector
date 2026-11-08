@@ -14,6 +14,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-26.04
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -24,10 +25,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - run: go mod tidy -diff
       - run: go test -race ./...
 
   lint:
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -44,6 +47,7 @@ jobs:
 
   govulncheck:
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -62,6 +66,7 @@ jobs:
       matrix:
         runner: [ubuntu-26.04, ubuntu-26.04-arm]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -78,6 +83,7 @@ jobs:
 
   dreeve-oracle:
     runs-on: ubuntu-26.04
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -94,6 +100,7 @@ jobs:
 
   rulesync:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -110,6 +117,7 @@ jobs:
 
   actionlint:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -125,6 +133,7 @@ jobs:
 
   zizmor:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -138,6 +147,7 @@ jobs:
 
   actions-lock:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: read
     env:
@@ -163,6 +173,7 @@ jobs:
       - zizmor
       - actions-lock
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions: {}
     steps:
       - name: Check required jobs

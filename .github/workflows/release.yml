@@ -16,6 +16,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-26.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -43,10 +44,11 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.meta.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
           provenance: false
-          sbom: false
+          sbom: true
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
   smoke:
@@ -56,6 +58,7 @@ jobs:
       matrix:
         runner: [ubuntu-26.04, ubuntu-26.04-arm]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read
@@ -79,6 +82,7 @@ jobs:
 
   newest:
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: read
     outputs:
@@ -101,6 +105,7 @@ jobs:
   publish:
     needs: [build, smoke, newest]
     runs-on: ubuntu-26.04
+    timeout-minutes: 10
     permissions:
       packages: write
       id-token: write
@@ -155,6 +160,7 @@ jobs:
   release:
     needs: [build, smoke, newest, publish]
     runs-on: ubuntu-26.04
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:

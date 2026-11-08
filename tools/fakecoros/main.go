@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -33,13 +34,17 @@ func (r *runner) Errorf(format string, args ...any) {
 	log.Printf(format, args...)
 }
 
+func (r *runner) Logf(format string, args ...any) {
+	log.Printf(format, args...)
+}
+
 func (r *runner) Cleanup(f func()) {
 	r.cleanups = append(r.cleanups, f)
 }
 
 func (r *runner) close() {
-	for i := len(r.cleanups) - 1; i >= 0; i-- {
-		r.cleanups[i]()
+	for _, cleanup := range slices.Backward(r.cleanups) {
+		cleanup()
 	}
 }
 
@@ -52,7 +57,7 @@ func main() {
 	activities := flag.Int("activities", 3, "activities to serve, one per day starting yesterday")
 	withoutFile := flag.Int("without-file", 0, "how many of the oldest activities have no FIT file")
 	throttle := flag.Int("throttle", 0, "how many of the first activity download requests answer HTTP 429")
-	fitFile := flag.String("fit", "", "FIT file served for every activity, e.g. testdata/fit/coros-outdoor-run.fit")
+	fitFile := flag.String("fit", "", "FIT file served for every activity, e.g. testdata/fit/coros-outdoor-run.fit; a small generated activity when empty")
 	flag.Parse()
 
 	var content []byte

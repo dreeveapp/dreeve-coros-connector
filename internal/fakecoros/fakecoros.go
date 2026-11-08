@@ -17,14 +17,25 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/profile/factory"
+	"github.com/muktihari/fit/profile/typedef"
+	"github.com/muktihari/fit/profile/untyped/fieldnum"
+	"github.com/muktihari/fit/profile/untyped/mesgnum"
+	"github.com/muktihari/fit/proto"
 )
 
-const fixtureFileHost = "http://coros-files.test/"
+const (
+	fixtureFileHost = "http://coros-files.test/"
+	fitEpoch        = 631065600
+)
 
 type TB interface {
 	Helper()
 	Fatalf(format string, args ...any)
 	Errorf(format string, args ...any)
+	Logf(format string, args ...any)
 	Cleanup(func())
 }
 
@@ -63,7 +74,25 @@ const (
 	ServerError
 	Truncate
 	Stall
+	ClientError
 )
+
+func (f Fault) String() string {
+	switch f {
+	case Throttle:
+		return "HTTP 429"
+	case ServerError:
+		return "HTTP 503"
+	case Truncate:
+		return "truncated body"
+	case Stall:
+		return "stall"
+	case ClientError:
+		return "HTTP 400"
+	default:
+		return "none"
+	}
+}
 
 type Request struct {
 	Endpoint Endpoint
@@ -155,9 +184,30 @@ func (s *Server) AddActivity(a Activity) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if a.Content == nil && !a.NoFile {
-		a.Content = []byte("FIT:" + a.LabelID)
+		a.Content = s.activityFIT(a)
 	}
 	s.activities[a.LabelID] = a
+}
+
+func (s *Server) activityFIT(a Activity) []byte {
+	field := factory.CreateField
+	created := uint32(a.Start.Unix() - fitEpoch)
+	file := &proto.FIT{Messages: []proto.Message{
+		{Num: mesgnum.FileId, Fields: []proto.Field{
+			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileActivity.Byte()),
+			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
+			field(mesgnum.FileId, fieldnum.FileIdTimeCreated).WithValue(created),
+		}},
+		{Num: mesgnum.Record, Fields: []proto.Field{
+			field(mesgnum.Record, fieldnum.RecordTimestamp).WithValue(created),
+			field(mesgnum.Record, fieldnum.RecordHeartRate).WithValue(uint8(120)),
+		}},
+	}}
+	var buf strings.Builder
+	if err := encoder.New(&buf).Encode(file); err != nil {
+		s.t.Errorf("fakecoros: encode the FIT file of %s: %v", a.LabelID, err)
+	}
+	return []byte(buf.String())
 }
 
 func (s *Server) RevokeTokens() {
@@ -208,12 +258,12 @@ func (s *Server) receive(e Endpoint, region int, labelID string) Fault {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requests = append(s.requests, Request{Endpoint: e, Region: region, LabelID: labelID, At: time.Now()})
-	queue := s.faults[e]
-	if len(queue) == 0 {
-		return 0
+	var fault Fault
+	if queue := s.faults[e]; len(queue) > 0 {
+		fault, s.faults[e] = queue[0], queue[1:]
 	}
-	s.faults[e] = queue[1:]
-	return queue[0]
+	s.t.Logf("fakecoros: received %s region=%d labelId=%q fault=%s", e, region, labelID, fault)
+	return fault
 }
 
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, fault Fault) bool {
@@ -222,6 +272,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, fault Fault) bool 
 		s.writeJSONStatus(w, http.StatusTooManyRequests, s.fixtures["http-error.synthetic"])
 	case ServerError:
 		s.writeJSONStatus(w, http.StatusServiceUnavailable, s.fixtures["http-error.synthetic"])
+	case ClientError:
+		s.writeJSONStatus(w, http.StatusBadRequest, s.fixtures["http-error.synthetic"])
 	case Stall:
 		<-r.Context().Done()
 	default:
