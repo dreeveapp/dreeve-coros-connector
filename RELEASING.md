@@ -17,7 +17,8 @@ A tag with a pre-release suffix (`v1.3.0-rc.1`) gets only its exact image tag an
 4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 5. First release only, as soon as `build` has pushed: the package is created private. In its settings on GitHub, make it public and check that it is linked to this repository, or `smoke` is the only job that can pull it.
 6. When the workflow is green:
-   - `docker buildx imagetools inspect ghcr.io/xballoy/dreeve-coros-connector:X.Y.Z` lists `linux/amd64` and `linux/arm64`, and `X.Y` shows the same digest, as does `latest` when this is the highest stable version.
+   - `docker buildx imagetools inspect ghcr.io/xballoy/dreeve-coros-connector:X.Y.Z` lists `linux/amd64` and `linux/arm64`, and `X.Y` shows the same digest, as does `latest` when this is the highest stable version. The two `unknown/unknown` entries are the SBOM attestations.
+   - `docker buildx imagetools inspect ghcr.io/xballoy/dreeve-coros-connector:X.Y.Z --format '{{json .SBOM}}'` shows an SPDX document for each platform that lists `github.com/muktihari/fit`.
    - `gh attestation verify oci://ghcr.io/xballoy/dreeve-coros-connector:X.Y.Z --repo xballoy/dreeve-coros-connector` succeeds.
 
 ## End-to-end with Dreeve
