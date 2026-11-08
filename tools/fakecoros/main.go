@@ -34,6 +34,10 @@ func (r *runner) Errorf(format string, args ...any) {
 	log.Printf(format, args...)
 }
 
+func (r *runner) Logf(format string, args ...any) {
+	log.Printf(format, args...)
+}
+
 func (r *runner) Cleanup(f func()) {
 	r.cleanups = append(r.cleanups, f)
 }

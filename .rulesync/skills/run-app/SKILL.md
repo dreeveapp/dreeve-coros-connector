@@ -42,6 +42,8 @@ Run it in the background from the repository root, because it reads `testdata/co
 
 Wait until `fake.env` contains `COROS_PASSWORD` before continuing.
 
+`fake.log` gets one line per request the fake receives, with the endpoint, region, label id and any injected fault. Quote it when the proof is about what reached COROS, such as nothing during a backoff, or one download per activity.
+
 ## 3. Drive the binary
 
 ```bash

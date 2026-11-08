@@ -35,6 +35,7 @@ type TB interface {
 	Helper()
 	Fatalf(format string, args ...any)
 	Errorf(format string, args ...any)
+	Logf(format string, args ...any)
 	Cleanup(func())
 }
 
@@ -75,6 +76,23 @@ const (
 	Stall
 	ClientError
 )
+
+func (f Fault) String() string {
+	switch f {
+	case Throttle:
+		return "HTTP 429"
+	case ServerError:
+		return "HTTP 503"
+	case Truncate:
+		return "truncated body"
+	case Stall:
+		return "stall"
+	case ClientError:
+		return "HTTP 400"
+	default:
+		return "none"
+	}
+}
 
 type Request struct {
 	Endpoint Endpoint
@@ -240,12 +258,12 @@ func (s *Server) receive(e Endpoint, region int, labelID string) Fault {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requests = append(s.requests, Request{Endpoint: e, Region: region, LabelID: labelID, At: time.Now()})
-	queue := s.faults[e]
-	if len(queue) == 0 {
-		return 0
+	var fault Fault
+	if queue := s.faults[e]; len(queue) > 0 {
+		fault, s.faults[e] = queue[0], queue[1:]
 	}
-	s.faults[e] = queue[1:]
-	return queue[0]
+	s.t.Logf("fakecoros: received %s region=%d labelId=%q fault=%s", e, region, labelID, fault)
+	return fault
 }
 
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, fault Fault) bool {
