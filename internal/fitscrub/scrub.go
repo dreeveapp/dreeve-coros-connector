@@ -67,7 +67,7 @@ func Scrub(b []byte, origin Origin) ([]byte, error) {
 		case serialNumber:
 			v.order.PutUint32(out[v.offset:], SerialNumber)
 		case cleared:
-			clear(out, v)
+			blank(out, v)
 		}
 	}
 	fit.Reseal(out, files)
@@ -117,7 +117,7 @@ func translate(b []byte, v value, shift uint32) {
 	v.order.PutUint32(b[v.offset:], position+shift)
 }
 
-func clear(b []byte, v value) {
+func blank(b []byte, v value) {
 	field := b[v.offset : v.offset+v.size]
 	switch v.baseType & 0x1F {
 	case 0x07, 0x0A, 0x0B, 0x0C, 0x10:

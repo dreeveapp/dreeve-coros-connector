@@ -6,7 +6,9 @@ linters:
     - errorlint
     - gosec
     - misspell
+    - modernize
     - noctx
+    - predeclared
     - unconvert
   settings:
     gosec:

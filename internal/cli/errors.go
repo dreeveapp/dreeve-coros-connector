@@ -24,13 +24,11 @@ func reportFor(counts map[string]int, err error) (daemon.Report, error) {
 	if err == nil {
 		return report, nil
 	}
-	var fatal *fatalError
-	if errors.As(err, &fatal) {
+	if _, ok := errors.AsType[*fatalError](err); ok {
 		return report, err
 	}
 	report.Token, report.Err = daemon.TokenUnchanged, err
-	var tokenErr *tokenError
-	if errors.As(err, &tokenErr) {
+	if tokenErr, ok := errors.AsType[*tokenError](err); ok {
 		report.Token = tokenErr.state
 	}
 	return report, nil

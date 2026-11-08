@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -38,8 +39,8 @@ func (r *runner) Cleanup(f func()) {
 }
 
 func (r *runner) close() {
-	for i := len(r.cleanups) - 1; i >= 0; i-- {
-		r.cleanups[i]()
+	for _, cleanup := range slices.Backward(r.cleanups) {
+		cleanup()
 	}
 }
 

@@ -58,8 +58,7 @@ func (w *world) startDaemon() *daemonProc {
 	go func() {
 		copies.Wait()
 		err := d.cmd.Wait()
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			d.code = exitErr.ExitCode()
 		}
 		close(d.exited)
