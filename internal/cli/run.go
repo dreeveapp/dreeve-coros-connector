@@ -73,7 +73,7 @@ func runDaemon(ctx context.Context, getenv Env, a *app) error {
 		served <- server.Serve(listener)
 		cancel()
 	}()
-	a.log.Info("serving /healthz and /status", "addr", listener.Addr().String(), "interval", interval.String())
+	a.log.Info("serving /healthz and /status", "version", version, "addr", listener.Addr().String(), "interval", interval.String())
 
 	runErr := d.Run(ctx)
 	shutdownCtx, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

@@ -27,6 +27,8 @@ const (
 	password = "correct horse"
 )
 
+const builtVersion = "1.2.3-acceptance"
+
 var binary string
 
 func TestMain(m *testing.M) {
@@ -36,7 +38,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	binary = filepath.Join(dir, "dreeve-coros-connector")
-	build := exec.Command("go", "build", "-o", binary, "../cmd/dreeve-coros-connector")
+	build := exec.Command("go", "build", "-ldflags", "-X github.com/xballoy/dreeve-coros-connector/internal/cli.version="+builtVersion, "-o", binary, "../cmd/dreeve-coros-connector")
 	build.Stdout, build.Stderr = os.Stdout, os.Stderr
 	if err := build.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "build binary:", err)
@@ -108,8 +110,7 @@ func (w *world) run(args ...string) result {
 		w.t.Fatalf("%v did not exit within 30s\nstdout: %s\nstderr: %s", args, stdout.String(), stderr.String())
 	}
 	code := 0
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		code = exitErr.ExitCode()
 	} else if err != nil {
 		w.t.Fatalf("run %v: %v", args, err)

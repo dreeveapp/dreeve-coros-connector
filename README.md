@@ -64,6 +64,7 @@ The token, the ledger and the backoff live in the volumes, so an upgrade needs n
 | `sync-once` | Checks the volumes (see [Startup checks](#startup-checks)), lists your activities, downloads each new one as `coros_<labelId>.fit` into `/watch`, records it in `/state/ledger.json`, then exits. It never reads your password. It exits non-zero when COROS throttles it or while it is still backing off. |
 | `run` | The image's default. Checks the volumes, runs a sync cycle at startup, then every `POLL_INTERVAL` seconds with a random ±10% jitter, and serves `/healthz` and `/status` on `HTTP_ADDR`. It reads `/tokens/token.json` again on every cycle and never logs in by itself. |
 | `healthcheck` | Exits 0 when `/healthz` on `HTTP_ADDR` answers 200, non-zero otherwise. The image's `HEALTHCHECK` runs it. |
+| `version` | Prints the version of the image. `run` also logs it at startup. |
 
 ## Rate limits and retries
 

@@ -20,7 +20,10 @@ commands:
   sync-once   deliver new COROS activities as FIT files to the watch folder, then exit
   run         sync every POLL_INTERVAL seconds and serve /healthz and /status on HTTP_ADDR
   healthcheck exit 0 when the running daemon reports healthy on /healthz
+  version     print the version and exit
 `
+
+var version = "dev"
 
 type Env func(string) string
 
@@ -50,6 +53,9 @@ func Run(ctx context.Context, args []string, getenv Env, stdin io.Reader, stdout
 		run = runDaemon
 	case "healthcheck":
 		run = healthcheck
+	case "version":
+		_, _ = fmt.Fprintln(stdout, version)
+		return 0
 	case "help", "-h", "--help":
 		_, _ = fmt.Fprint(stdout, usage)
 		return 0
