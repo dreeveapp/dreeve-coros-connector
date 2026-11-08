@@ -34,9 +34,14 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 | Race | `go test -race ./...` |
 | Fuzz | `go test -run '^$' -fuzz FuzzParse -fuzztime 30s ./internal/ledger` |
 | Container smoke | `CONTAINER_SMOKE=1 go test -count=1 -run TestContainerSmoke ./acceptance` |
+| Container smoke on a pushed image | `CONTAINER_SMOKE=1 CONTAINER_SMOKE_IMAGE=ghcr.io/...@sha256:... go test -count=1 -run TestContainerSmoke ./acceptance` |
 | Live contract (local only, never CI) | `COROS_EMAIL=... COROS_PASSWORD=... go test -tags live -count=1 -run TestLiveContract ./internal/coros` |
 | Lint | `golangci-lint run ./...` |
 | Vulnerabilities | `go tool govulncheck ./...` |
 | Workflows | `npx --no-install actionlint`, `zizmor .`, `gh actions-lock --verify` |
 
 The live contract check logs in to the real COROS API, which signs out Training Hub and every running connector on that account.
+
+## Releasing
+
+A `vX.Y.Z` tag runs `.github/workflows/release.yml`, which tags, attests and releases an image only after the container smoke passed on it on both architectures. `RELEASING.md` holds the pre-release checklist, including the end-to-end run with Dreeve. Keep the README's compose example runnable as-is: that run pastes it unchanged.

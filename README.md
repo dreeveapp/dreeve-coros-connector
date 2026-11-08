@@ -4,6 +4,58 @@ Downloads your completed COROS activities as FIT files into [Dreeve](https://git
 
 One container serves one COROS account. Only completed activities with a FIT file are delivered; activities without a file are retried, then recorded and skipped.
 
+## Install
+
+Releases are published to `ghcr.io/xballoy/dreeve-coros-connector` for `linux/amd64` and `linux/arm64`, under three tags: the exact version (`1.2.3`), the latest patch of a minor version (`1.2`), and `latest` for the highest stable version. A pre-release such as `1.3.0-rc.1` gets only its exact tag.
+
+Each image carries a signed build provenance attestation. To check that an image was built by this repository's release workflow:
+
+```sh
+gh attestation verify oci://ghcr.io/xballoy/dreeve-coros-connector:latest --repo xballoy/dreeve-coros-connector
+```
+
+## Docker Compose
+
+Add the connector next to the `app` and `daemon` services in [Dreeve's `docker-compose.yml`](https://docs.dreeve.app/getting-started/installation/#docker-composeyml), mounting the same `./watch` folder:
+
+```yaml
+  coros-connector:
+    image: ghcr.io/xballoy/dreeve-coros-connector:latest
+    container_name: dreeve-coros-connector
+    user: "1000:1000"
+    read_only: true
+    restart: unless-stopped
+    volumes:
+      - ./watch:/watch
+      - ./coros/state:/state
+      - ./coros/tokens:/tokens
+```
+
+`user:` must be able to write to the three folders. Use your own uid and gid (`id -u`, `id -g`), or Dreeve's `PUID` and `PGID` if you set them. Create the folders and give them to that user before the first start, since Docker would otherwise create them owned by root:
+
+```sh
+mkdir -p watch coros/state coros/tokens
+sudo chown 1000:1000 watch coros/state coros/tokens
+```
+
+Log in once, then start the connector:
+
+```sh
+docker compose run --rm -it coros-connector login
+docker compose up -d coros-connector
+```
+
+Activities appear in `./watch` and Dreeve's daemon imports them on its next run. `docker compose ps` shows the connector's health. If it turns unhealthy because the token was revoked, run the `login` command again; the running container resumes on its next cycle.
+
+## Upgrading
+
+```sh
+docker compose pull coros-connector
+docker compose up -d coros-connector
+```
+
+The token, the ledger and the backoff live in the volumes, so an upgrade needs no new `login` and never delivers an activity twice. Read the [release notes](https://github.com/xballoy/dreeve-coros-connector/releases) before you upgrade: they list any change to the configuration or the volumes. Until `1.0.0`, a new minor version may contain such a change; pin the `0.Y` tag to receive only fixes. To roll back, set the previous exact version as the `image:` tag.
+
 ## Commands
 
 | Command | What it does |
@@ -117,33 +169,11 @@ secrets:
     file: ./coros/password.txt
 ```
 
-## Docker Compose
-
-```yaml
-services:
-  coros-connector:
-    image: ghcr.io/xballoy/dreeve-coros-connector:latest
-    user: "1000:1000"
-    read_only: true
-    restart: unless-stopped
-    volumes:
-      - ./dreeve/watch:/watch
-      - ./coros/state:/state
-      - ./coros/tokens:/tokens
-```
-
-Log in once, then start the daemon:
-
-```sh
-docker compose run --rm -it coros-connector login
-docker compose up -d
-```
-
-`docker compose ps` shows the container's health. If it turns unhealthy because the token was revoked, run the `login` command again; the running container resumes on its next cycle.
-
 ## Development
 
 See [`CLAUDE.md`](CLAUDE.md) for how to run each test level. Agent guidance is generated from `.rulesync/`; edit it there and run `npm ci --ignore-scripts && npx rulesync generate`.
+
+Releases follow [`RELEASING.md`](RELEASING.md).
 
 CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions and npm tooling up to date.
 

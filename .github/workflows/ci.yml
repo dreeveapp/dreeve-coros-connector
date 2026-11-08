@@ -57,7 +57,11 @@ jobs:
       - run: go tool govulncheck ./...
 
   container-smoke:
-    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-26.04, ubuntu-26.04-arm]
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     steps:
