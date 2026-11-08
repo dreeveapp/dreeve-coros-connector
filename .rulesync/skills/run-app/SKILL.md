@@ -32,7 +32,7 @@ go build -o "$S/fakecoros" ./tools/fakecoros
 
 ## 2. Start the fake COROS server
 
-Run it in the background from the repository root. It prints the environment the connector needs, then serves until killed:
+Run it in the background from the repository root, because it reads `testdata/coros` relative to the working directory; from anywhere else, pass `-fixtures <repository>/testdata/coros`. It prints the environment the connector needs, then serves until killed:
 
 ```bash
 "$S/fakecoros" -activities 3 -without-file 1 > "$S/fake.env" 2> "$S/fake.log" &
@@ -61,7 +61,18 @@ curl -s http://127.0.0.1:18081/status
 HTTP_ADDR=127.0.0.1:18081 "$S/dreeve-coros-connector" healthcheck; echo "exit=$?"
 ```
 
-Run whatever sequence shows the change: a second `sync-once` to show nothing is delivered twice, a wrong `COROS_PASSWORD` for the bad-credentials error, `-home-region 3` for the wrong-region error, a corrupted `ledger.json` for the corrupt-ledger error. For rate limiting, `MAX_DOWNLOADS_PER_CYCLE` and `DOWNLOAD_DELAY_SECONDS` show the cap and pacing, `-throttle 1` the backoff, and `-without-file` with a low `MAX_ATTEMPTS` the retries.
+Run whatever sequence shows the change. Recipes for the usual cases:
+
+- **Nothing delivered twice**: a second `sync-once`.
+- **Bad credentials**: a wrong `COROS_PASSWORD` on `login`.
+- **Wrong region**: start the fake with `-home-region 3`; `login` fails and `tokens/` stays empty.
+- **Corrupt ledger**: edit `ledger.json` by hand, then `sync-once`.
+- **Corrupt download**: `-fit` pointing at any file that is not FIT (an HTML page will do), with `MAX_ATTEMPTS=2`: two `sync-once` runs end the activity as `failed` and `watch/` stays empty.
+- **Retries and missing files**: `-without-file 1` with a low `MAX_ATTEMPTS`.
+- **429 backoff**: `-throttle 1`. The first backoff is 15 minutes, too long to watch, but `MAX_BACKOFF_SECONDS` caps every backoff, so set it to about 20 to show the whole story: the 429, `backoff` in `ledger.json`, a `sync-once` refused with "no request sent", then a delivery once it has passed.
+- **Pacing and caps**: `MAX_DOWNLOADS_PER_CYCLE`, and `DOWNLOAD_DELAY_TESTING` (a Go duration) when `DOWNLOAD_DELAY_SECONDS`' minimum of 1 is too slow.
+
+Some paths cannot be triggered from the command line, such as a failure while `login` verifies its new token. The acceptance tests drive the real binary with injected faults for those (`go test -count=1 -v -run '<TestName>' ./acceptance/`); say in the proof that this is how they were shown.
 
 ## 4. Container run
 
@@ -84,4 +95,6 @@ Kill the fake server (`kill %1` or its pid) and leave the scratchpad as it is.
 
 ## Proof
 
-Paste the commands and their output in a fenced block: exit codes, delivered file names and modes, and the relevant part of the ledger. Trim paths to the scratchpad prefix if they are long. Never paste a token from a real account.
+Paste the commands and their output in a fenced block: exit codes, delivered file names and modes, and the relevant part of the ledger. Show each command line as it was run and its output as it came out; a reader trusts copied output, not a summary of it. Trim paths to the scratchpad prefix if they are long, and cut uninteresting lines rather than rewording them. Never paste a token from a real account.
+
+Then say plainly what the run did not show, so nobody reads more into it than it proves.

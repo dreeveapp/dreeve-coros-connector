@@ -35,9 +35,9 @@ The Proof section shows the change working in the running connector: command out
 
 ## 4. Write the content
 
-**Title**: Conventional Commits, `<type>(<optional scope>): <description>`, `type` from the dominant change, `!` for a breaking change, imperative and lowercase, no trailing period, 72 characters at most.
+**Title**: Conventional Commits, `<type>(<optional scope>): <description>`, `type` from the dominant change, `!` for a breaking change, imperative and lowercase, no trailing period, 72 characters at most. When the PR mixes several changes, name the one users notice most specifically rather than a vague umbrella ("keep verified login tokens and reject invalid FIT downloads", not "harden login and delivery").
 
-**Body**: fill `.github/PULL_REQUEST_TEMPLATE.md`. Describe user impact and motivation; no file names, function names or code, except the commands in Proof. Add `Closes #N` for each GitHub issue referenced in the commits or branch name.
+**Body**: fill `.github/PULL_REQUEST_TEMPLATE.md`. Describe is for a reader who never opens the diff: say what changes for the person running the connector and why, in their words. Write "a download that is not a valid FIT file is retried, then marked failed", not "`deliver` now calls `fit.Walk`"; write "the release image reports its version", not "`-ldflags -X` in the Dockerfile". Configuration variables users set (`WRITE_TITLE`, `MAX_ATTEMPTS`) are fine; file, function and package names are not, except in the commands Proof shows. Add `Closes #N` for each GitHub issue referenced in the commits or branch name, and drop the template's empty `Closes #` line when there is none.
 
 **Update mode**: keep what a person added to the existing body that is not a summary of the change (images, issue references, ticked checklists, notes for reviewers); replace only the what/why.
 
