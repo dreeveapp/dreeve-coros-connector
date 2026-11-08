@@ -2,6 +2,7 @@ package fitscrub_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/muktihari/fit/decoder"
 	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/kit/hash/crc16"
 	"github.com/muktihari/fit/profile/basetype"
 	"github.com/muktihari/fit/profile/factory"
 	"github.com/muktihari/fit/profile/typedef"
@@ -147,6 +149,27 @@ func TestScrubKeepsEveryOtherFieldAndTheFileSize(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestScrubAcceptsAHeaderWithoutAHeaderCRC(t *testing.T) {
+	raw := encode(t, nil, activity(48.85, 2.29))
+	data := raw[14 : len(raw)-2]
+	noHeaderCRC := append(bytes.Clone(raw[:12]), 0, 0)
+	noHeaderCRC = append(noHeaderCRC, data...)
+	noHeaderCRC = binary.LittleEndian.AppendUint16(noHeaderCRC, crc(data))
+	if _, err := decodeStrict(noHeaderCRC); err != nil {
+		t.Fatalf("input does not decode with checksums enforced: %v", err)
+	}
+
+	scrubbed := scrub(t, noHeaderCRC)
+
+	assertTranslatedToOrigin(t, positions(decode(t, noHeaderCRC)), positions(decode(t, scrubbed)))
+}
+
+func crc(b []byte) uint16 {
+	h := crc16.New()
+	_, _ = h.Write(b)
+	return h.Sum16()
 }
 
 func TestScrubRejectsInputThatIsNotAnIntactFITFile(t *testing.T) {

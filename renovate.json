@@ -1,7 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "docker:pinDigests", ":pinDevDependencies"],
-  "enabledManagers": ["gomod", "dockerfile", "github-actions", "npm", "custom.regex"],
+  "extends": ["github>xballoy/renovate-config"],
   "constraints": {
     "ghActionsLock": "v0.4.1"
   },
@@ -38,6 +37,16 @@
       "matchStrings": ["\"ghActionsLock\": \"(?<currentValue>v[^\"]+)\""],
       "depNameTemplate": "github/gh-actions-lock",
       "datasourceTemplate": "github-releases"
+    },
+    {
+      "customType": "regex",
+      "description": "Dreeve commit whose fit-tool the oracle test builds",
+      "managerFilePatterns": ["/^testdata/dreeve/fit-tool\\.json$/"],
+      "matchStrings": ["\"commit\": \"(?<currentDigest>[0-9a-f]{40})\""],
+      "currentValueTemplate": "master",
+      "depNameTemplate": "dreeveapp/dreeve",
+      "packageNameTemplate": "https://github.com/dreeveapp/dreeve",
+      "datasourceTemplate": "git-refs"
     }
   ]
 }

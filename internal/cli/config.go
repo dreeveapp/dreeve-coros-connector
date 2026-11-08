@@ -98,10 +98,10 @@ func positiveInt(getenv Env, key string, fallback int) (int, error) {
 	return n, nil
 }
 
-func boolEnv(getenv Env, key string) (bool, error) {
+func boolEnv(getenv Env, key string, fallback bool) (bool, error) {
 	raw := getenv(key)
 	if raw == "" {
-		return false, nil
+		return fallback, nil
 	}
 	b, err := strconv.ParseBool(raw)
 	if err != nil {
