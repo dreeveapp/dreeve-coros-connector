@@ -294,8 +294,8 @@ func TestCycleThatCannotTellTheTokenStateKeepsThePreviousHealth(t *testing.T) {
 }
 
 func TestStatusReportsTheLastCycleAndLedgerCounts(t *testing.T) {
+	begin := newFakeClock().now
 	h := start(t, time.Hour, scripted(daemon.Report{Token: daemon.TokenValid, Counts: map[string]int{"delivered": 3, "no-file": 1}}))
-	begin := h.clock.Now()
 
 	h.completeCycle(t)
 
