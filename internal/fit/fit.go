@@ -63,7 +63,7 @@ func Reseal(b []byte, files []File) {
 
 func Append(b []byte, f File, records []byte) ([]byte, error) {
 	dataSize := f.End - f.Start - f.HeaderSize + len(records)
-	if dataSize < 0 || dataSize > math.MaxUint32 {
+	if dataSize < 0 || uint64(dataSize) > math.MaxUint32 {
 		return nil, fmt.Errorf("%w: no room for %d more bytes in the data size", ErrMalformed, len(records))
 	}
 	out := make([]byte, 0, len(b)+len(records))
