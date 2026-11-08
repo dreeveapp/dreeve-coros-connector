@@ -188,7 +188,7 @@ See [`CLAUDE.md`](CLAUDE.md) for how to run each test level. Agent guidance is g
 
 Releases follow [`RELEASING.md`](RELEASING.md).
 
-CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions, npm tooling and the pinned Dreeve commit up to date.
+CI runs `govulncheck`, actionlint and zizmor, and verifies `.github/workflows/actions.lock` with the [`gh actions-lock`](https://github.com/github/gh-actions-lock) extension. After changing any `uses:` in a workflow, run `gh actions-lock` and commit the lockfile with the workflow. Renovate keeps Go modules, base images, actions, npm tooling and the pinned Dreeve commit up to date, with the shared [`xballoy/renovate-config`](https://github.com/xballoy/renovate-config) preset: pull requests open early on Mondays (America/Toronto), minor and patch updates are grouped and merge automatically once CI passes, and security fixes skip the schedule.
 
 CI also builds Dreeve's own `fit-tool` from the commit pinned in `testdata/dreeve/fit-tool.json` and checks that it reads the title and every original message from delivered files.
 

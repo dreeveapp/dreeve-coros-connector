@@ -1,7 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "docker:pinDigests", ":pinDevDependencies"],
-  "enabledManagers": ["gomod", "dockerfile", "github-actions", "npm", "custom.regex"],
+  "extends": ["github>xballoy/renovate-config"],
   "constraints": {
     "ghActionsLock": "v0.4.1"
   },
