@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -25,6 +27,13 @@ func login(ctx context.Context, getenv Env, a *app) error {
 		return err
 	}
 	p := loadPaths(getenv)
+	delay, err := positiveDuration(getenv, "DOWNLOAD_DELAY_TESTING")
+	if err != nil {
+		return err
+	}
+	if delay == 0 {
+		delay = verifyRetryDelay
+	}
 
 	result, err := client.Login(ctx, region.loginRegion(), email.value, password.value)
 	if errors.Is(err, coros.ErrBadCredentials) {
@@ -34,7 +43,7 @@ func login(ctx context.Context, getenv Env, a *app) error {
 		return err
 	}
 	a.secrets.Add(result.Token)
-	if err := keepToken(ctx, client, region, result, p, a); err != nil {
+	if err := keepToken(ctx, client, region, result, p, a, delay); err != nil {
 		return fmt.Errorf("%w; %s", err, signedOutNotice)
 	}
 	a.log.Info(signedOutNotice)
@@ -43,17 +52,25 @@ func login(ctx context.Context, getenv Env, a *app) error {
 
 const signedOutNotice = "this login signed out every other COROS session of the account, including Training Hub"
 
-func keepToken(ctx context.Context, client *coros.Client, region regionChoice, result coros.LoginResult, p paths, a *app) error {
+const (
+	verifyAttempts   = 3
+	verifyRetryDelay = 2 * time.Second
+)
+
+func keepToken(ctx context.Context, client *coros.Client, region regionChoice, result coros.LoginResult, p paths, a *app, delay time.Duration) error {
 	regionID := region.home(result.RegionID)
 	host, err := client.HomeHost(regionID)
 	if err != nil {
 		return region.unknownHost(result.RegionID, err)
 	}
-	if err := client.Session(host, result.Token).Verify(ctx); err != nil {
-		if errors.Is(err, coros.ErrInvalidToken) {
-			return region.tokenRejected(result.RegionID, host)
-		}
+	err = verify(ctx, client.Session(host, result.Token), delay)
+	switch {
+	case errors.Is(err, coros.ErrInvalidToken):
+		return region.tokenRejected(result.RegionID, host)
+	case isResultError(err), ctx.Err() != nil:
 		return fmt.Errorf("verify token on %s: %w; nothing was saved", host, err)
+	case err != nil:
+		a.log.Warn("token not verified, saving it anyway: the connector reports it on its first sync if COROS rejects it", "host", host, "error", err.Error())
 	}
 
 	tok := storedToken{Token: result.Token, Host: host, RegionID: regionID, IssuedAt: time.Now().UTC().Truncate(time.Second)}
@@ -117,4 +134,33 @@ func (r regionChoice) tokenRejected(reported int, host string) error {
 		return fmt.Errorf("%s rejected the new token (result %s): COROS_REGION=%s is not the account's region; nothing was saved", host, coros.ResultInvalidToken, r.name)
 	}
 	return fmt.Errorf("COROS reported region %d but %s rejected the new token (result %s): the account lives in another region, set COROS_REGION to it; nothing was saved", reported, host, coros.ResultInvalidToken)
+}
+
+func verify(ctx context.Context, session *coros.Session, delay time.Duration) error {
+	var err error
+	for attempt := 1; attempt <= verifyAttempts; attempt++ {
+		err = session.Verify(ctx)
+		if !transient(err) || attempt == verifyAttempts {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay * time.Duration(attempt)):
+		}
+	}
+	return err
+}
+
+func isResultError(err error) bool {
+	_, ok := errors.AsType[*coros.ResultError](err)
+	return ok
+}
+
+func transient(err error) bool {
+	if httpErr, ok := errors.AsType[*coros.HTTPError](err); ok {
+		return httpErr.Status == http.StatusTooManyRequests || httpErr.Status >= http.StatusInternalServerError
+	}
+	netErr, ok := errors.AsType[net.Error](err)
+	return ok && netErr.Timeout()
 }

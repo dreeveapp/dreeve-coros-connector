@@ -63,6 +63,7 @@ const (
 	ServerError
 	Truncate
 	Stall
+	ClientError
 )
 
 type Request struct {
@@ -222,6 +223,8 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, fault Fault) bool 
 		s.writeJSONStatus(w, http.StatusTooManyRequests, s.fixtures["http-error.synthetic"])
 	case ServerError:
 		s.writeJSONStatus(w, http.StatusServiceUnavailable, s.fixtures["http-error.synthetic"])
+	case ClientError:
+		s.writeJSONStatus(w, http.StatusBadRequest, s.fixtures["http-error.synthetic"])
 	case Stall:
 		<-r.Context().Done()
 	default:
