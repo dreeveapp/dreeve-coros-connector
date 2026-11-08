@@ -67,7 +67,7 @@ func keepToken(ctx context.Context, client *coros.Client, region regionChoice, r
 	switch {
 	case errors.Is(err, coros.ErrInvalidToken):
 		return region.tokenRejected(result.RegionID, host)
-	case isResultError(err), ctx.Err() != nil:
+	case isResultError(err), err != nil && ctx.Err() != nil:
 		return fmt.Errorf("verify token on %s: %w; nothing was saved", host, err)
 	case err != nil:
 		a.log.Warn("token not verified, saving it anyway: the connector reports it on its first sync if COROS rejects it", "host", host, "error", err.Error())
