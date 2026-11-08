@@ -60,7 +60,7 @@ It refuses a file that is truncated, fails its CRC, or does not decode. It does 
 ### Adding a golden file
 
 1. Scrub the export as above and save it as `testdata/fit/coros-<activity>.fit`.
-2. Run `go test ./internal/fittitle ./acceptance` and `DREEVE_ORACLE=1 go test -count=1 -run TestDreeveOracle ./acceptance`. Every test that globs `testdata/fit/*.fit` picks the file up; no test needs editing.
+2. Run `go test ./internal/fit ./internal/fittitle ./acceptance` and `DREEVE_ORACLE=1 go test -count=1 -run TestDreeveOracle ./acceptance`. Every test that globs `testdata/fit/*.fit` picks the file up; no test needs editing.
 3. Record on issue #1 anything the file reveals about COROS exports, such as a `workout` message or chained FIT files.
 
 Dreeve's own `fit-tool`, built by the oracle test, is the source of truth for what Dreeve reads from a file. When `muktihari/fit` in this module and the oracle disagree, the oracle wins: fix the connector, not the oracle test.

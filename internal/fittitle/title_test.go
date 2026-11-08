@@ -20,6 +20,7 @@ import (
 	"github.com/muktihari/fit/profile/untyped/mesgnum"
 	"github.com/muktihari/fit/proto"
 
+	"github.com/xballoy/dreeve-coros-connector/internal/fit"
 	"github.com/xballoy/dreeve-coros-connector/internal/fittitle"
 )
 
@@ -202,21 +203,14 @@ func TestWriteKeepsATitleAtTheFieldLimit(t *testing.T) {
 }
 
 func TestWriteRejectsInputThatIsNotAnIntactFITFile(t *testing.T) {
-	valid := encode(t, nil, activity())
-	badCRC := bytes.Clone(valid)
+	badCRC := encode(t, nil, activity())
 	badCRC[len(badCRC)-1] ^= 0xFF
-	badHeaderCRC := bytes.Clone(valid)
-	binary.LittleEndian.PutUint16(badHeaderCRC[12:], binary.LittleEndian.Uint16(badHeaderCRC[12:])^0xFFFF)
 	for name, c := range map[string]struct {
 		input []byte
 		want  error
 	}{
-		"empty":            {nil, fittitle.ErrNotFIT},
-		"not FIT":          {[]byte("FIT content of 900000000000000002"), fittitle.ErrNotFIT},
-		"truncated":        {valid[:len(valid)-10], fittitle.ErrTruncated},
-		"file CRC":         {badCRC, fittitle.ErrChecksum},
-		"header CRC":       {badHeaderCRC, fittitle.ErrChecksum},
-		"trailing garbage": {append(bytes.Clone(valid), 1, 2, 3), fittitle.ErrNotFIT},
+		"not FIT":  {[]byte("FIT content of 900000000000000002"), fit.ErrNotFIT},
+		"file CRC": {badCRC, fit.ErrChecksum},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := fittitle.Write(c.input, "Morning Run"); !errors.Is(err, c.want) {

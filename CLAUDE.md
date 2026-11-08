@@ -14,6 +14,7 @@ Go service that downloads completed COROS activities as FIT files into Dreeve's 
 - `internal/fakecoros`: fake COROS server for tests, replays `testdata/coros/`, injects faults (429, 5xx, truncated or stalled bodies) and logs every request it receives
 - `acceptance`: black-box tests that build and drive the binary
 - `tools/fakecoros`: dev-only fake COROS server for running the connector by hand (see the `run-app` skill); never shipped in the image
+- `internal/fit`: walks the records of a raw FIT file, validates its headers and CRCs, and rewrites them after an in-place edit or an append; `fittitle` and `fitscrub` build on it so neither re-encodes a file
 - `internal/fittitle`: appends a `workout` message holding the COROS title to a downloaded FIT file without re-encoding it (`WRITE_TITLE`)
 - `internal/fitscrub`, `tools/fitscrub`: dev-only FIT anonymiser for the golden files in `testdata/fit/` (see the fixtures rule); never shipped in the image
 
