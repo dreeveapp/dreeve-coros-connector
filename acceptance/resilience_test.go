@@ -225,9 +225,7 @@ func TestTransientFailureIsRetriedAndEventuallyDelivered(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			w := newWorld(t, 1, 1)
 			w.env["HTTP_TIMEOUT_TESTING"] = "300ms"
-			a := w.addActivity(labelID(0), 1, func(a *fakecoros.Activity) {
-				a.Content = []byte(strings.Repeat("FIT bytes ", 1000))
-			})
+			a := w.addActivity(labelID(0), 1)
 			w.mustRun("login")
 			w.fake.InjectFaults(c.endpoint, c.fault, c.fault)
 

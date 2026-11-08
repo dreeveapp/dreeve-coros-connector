@@ -52,7 +52,7 @@ func main() {
 	activities := flag.Int("activities", 3, "activities to serve, one per day starting yesterday")
 	withoutFile := flag.Int("without-file", 0, "how many of the oldest activities have no FIT file")
 	throttle := flag.Int("throttle", 0, "how many of the first activity download requests answer HTTP 429")
-	fitFile := flag.String("fit", "", "FIT file served for every activity, e.g. testdata/fit/coros-outdoor-run.fit")
+	fitFile := flag.String("fit", "", "FIT file served for every activity, e.g. testdata/fit/coros-outdoor-run.fit; a small generated activity when empty")
 	flag.Parse()
 
 	var content []byte

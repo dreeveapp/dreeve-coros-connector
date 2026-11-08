@@ -12,6 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/profile/factory"
+	"github.com/muktihari/fit/profile/typedef"
+	"github.com/muktihari/fit/profile/untyped/fieldnum"
+	"github.com/muktihari/fit/profile/untyped/mesgnum"
+	"github.com/muktihari/fit/proto"
+
 	"github.com/xballoy/dreeve-coros-connector/internal/fakecoros"
 )
 
@@ -125,7 +132,7 @@ func (w *world) addActivity(labelID string, daysAgo int, opts ...func(*fakecoros
 		SportType: 100,
 		Name:      "Run " + labelID,
 		Start:     nowMinusDays(daysAgo),
-		Content:   []byte("FIT content of " + labelID),
+		Content:   fitWithWorkout(w.t, "Planned "+labelID),
 	}
 	for _, opt := range opts {
 		opt(&a)
@@ -217,4 +224,27 @@ func assertContains(t *testing.T, haystack string, needles ...string) {
 
 func nowMinusDays(days int) time.Time {
 	return time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour)
+}
+
+func fitWithWorkout(t *testing.T, name string) []byte {
+	t.Helper()
+	field := factory.CreateField
+	fit := &proto.FIT{Messages: []proto.Message{
+		{Num: mesgnum.FileId, Fields: []proto.Field{
+			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileActivity.Byte()),
+			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
+		}},
+		{Num: mesgnum.Workout, Fields: []proto.Field{
+			field(mesgnum.Workout, fieldnum.WorkoutWktName).WithValue(name),
+		}},
+		{Num: mesgnum.Record, Fields: []proto.Field{
+			field(mesgnum.Record, fieldnum.RecordTimestamp).WithValue(uint32(1100000001)),
+			field(mesgnum.Record, fieldnum.RecordHeartRate).WithValue(uint8(120)),
+		}},
+	}}
+	var buf bytes.Buffer
+	if err := encoder.New(&buf).Encode(fit); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

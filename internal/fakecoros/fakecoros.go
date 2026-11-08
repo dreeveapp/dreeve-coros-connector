@@ -17,9 +17,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/muktihari/fit/encoder"
+	"github.com/muktihari/fit/profile/factory"
+	"github.com/muktihari/fit/profile/typedef"
+	"github.com/muktihari/fit/profile/untyped/fieldnum"
+	"github.com/muktihari/fit/profile/untyped/mesgnum"
+	"github.com/muktihari/fit/proto"
 )
 
-const fixtureFileHost = "http://coros-files.test/"
+const (
+	fixtureFileHost = "http://coros-files.test/"
+	fitEpoch        = 631065600
+)
 
 type TB interface {
 	Helper()
@@ -156,9 +166,30 @@ func (s *Server) AddActivity(a Activity) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if a.Content == nil && !a.NoFile {
-		a.Content = []byte("FIT:" + a.LabelID)
+		a.Content = s.activityFIT(a)
 	}
 	s.activities[a.LabelID] = a
+}
+
+func (s *Server) activityFIT(a Activity) []byte {
+	field := factory.CreateField
+	created := uint32(a.Start.Unix() - fitEpoch)
+	file := &proto.FIT{Messages: []proto.Message{
+		{Num: mesgnum.FileId, Fields: []proto.Field{
+			field(mesgnum.FileId, fieldnum.FileIdType).WithValue(typedef.FileActivity.Byte()),
+			field(mesgnum.FileId, fieldnum.FileIdManufacturer).WithValue(typedef.ManufacturerCoros.Uint16()),
+			field(mesgnum.FileId, fieldnum.FileIdTimeCreated).WithValue(created),
+		}},
+		{Num: mesgnum.Record, Fields: []proto.Field{
+			field(mesgnum.Record, fieldnum.RecordTimestamp).WithValue(created),
+			field(mesgnum.Record, fieldnum.RecordHeartRate).WithValue(uint8(120)),
+		}},
+	}}
+	var buf strings.Builder
+	if err := encoder.New(&buf).Encode(file); err != nil {
+		s.t.Errorf("fakecoros: encode the FIT file of %s: %v", a.LabelID, err)
+	}
+	return []byte(buf.String())
 }
 
 func (s *Server) RevokeTokens() {

@@ -86,10 +86,11 @@ Dreeve names an imported activity after the first `workout` message's `wkt_name`
 The file is delivered exactly as COROS served it, with the reason logged, when:
 
 - it already has a `workout` message, which Dreeve would read first anyway;
-- the activity has no name;
-- it is not an intact FIT file (bad checksum, truncated, or not FIT at all). This one is a warning, since Dreeve will import it under a generic title.
+- the activity has no name.
 
 With `WRITE_TITLE=false`, every file is delivered exactly as COROS served it.
+
+Whatever `WRITE_TITLE` says, a download that is not an intact FIT file (bad checksum, truncated, or not FIT at all) is never delivered: it counts as a failed attempt, is retried on later cycles, and ends as `failed` after `MAX_ATTEMPTS`.
 
 ## Startup checks
 

@@ -16,6 +16,7 @@ import (
 	"github.com/xballoy/dreeve-coros-connector/internal/atomicfile"
 	"github.com/xballoy/dreeve-coros-connector/internal/coros"
 	"github.com/xballoy/dreeve-coros-connector/internal/daemon"
+	"github.com/xballoy/dreeve-coros-connector/internal/fit"
 	"github.com/xballoy/dreeve-coros-connector/internal/fittitle"
 	"github.com/xballoy/dreeve-coros-connector/internal/ledger"
 	"github.com/xballoy/dreeve-coros-connector/internal/logging"
@@ -287,6 +288,9 @@ func (s *syncer) deliver(ctx context.Context, session *coros.Session, a coros.Ac
 	data, err := s.client.Fetch(ctx, fileURL)
 	if err != nil {
 		return ledger.Entry{}, fmt.Errorf("download activity %s: %w", a.LabelID, err)
+	}
+	if _, err := fit.Walk(data, func(fit.Message) error { return nil }); err != nil {
+		return ledger.Entry{}, fmt.Errorf("activity %s served an invalid FIT file: %w", a.LabelID, err)
 	}
 	if s.writeTitle {
 		data = s.withTitle(data, a)

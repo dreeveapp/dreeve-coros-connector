@@ -37,7 +37,8 @@ func TestContainerSmoke(t *testing.T) {
 		ListenAddr:     "0.0.0.0:0",
 		AdvertisedHost: "host.docker.internal",
 	})
-	fake.AddActivity(fakecoros.Activity{LabelID: "900000000000000002", SportType: 100, Name: "Run", Start: nowMinusDays(1), Content: []byte("FIT smoke")})
+	served := fitWithWorkout(t, "Smoke run")
+	fake.AddActivity(fakecoros.Activity{LabelID: "900000000000000002", SportType: 100, Name: "Run", Start: nowMinusDays(1), Content: served})
 
 	volumes := map[string]string{"/watch": t.TempDir(), "/state": t.TempDir(), "/tokens": t.TempDir()}
 	for _, dir := range volumes {
@@ -60,7 +61,7 @@ func TestContainerSmoke(t *testing.T) {
 	delivered := filepath.Join(volumes["/watch"], "coros_900000000000000002.fit")
 	assertMode(t, delivered, 0o644)
 	assertMode(t, filepath.Join(volumes["/tokens"], "token.json"), 0o600)
-	if data, err := os.ReadFile(delivered); err != nil || string(data) != "FIT smoke" {
+	if data, err := os.ReadFile(delivered); err != nil || !bytes.Equal(data, served) {
 		t.Fatalf("delivered file content %q, err %v", data, err)
 	}
 	if runtime.GOOS == "linux" {
