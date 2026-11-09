@@ -6,7 +6,7 @@ Until `1.0.0`, security fixes go to the latest `0.Y` release only, published as 
 
 ## Reporting a vulnerability
 
-Report it privately through [GitHub's private vulnerability reporting](https://github.com/xballoy/dreeve-coros-connector/security/advisories/new). Do not open a public issue or pull request.
+Report it privately through [GitHub's private vulnerability reporting](https://github.com/dreeveapp/dreeve-coros-connector/security/advisories/new). Do not open a public issue or pull request.
 
 Include the image version (`docker compose run --rm coros-connector version`), what an attacker can do, and the steps to reproduce it. Never include a real COROS password or token: redact them, or reproduce with the fake COROS server described in [CONTRIBUTING.md](CONTRIBUTING.md#running-the-connector-by-hand).
 
@@ -24,4 +24,4 @@ In scope:
 Out of scope:
 
 - COROS's own services and Dreeve itself: report those to their maintainers
-- Logging in signing out every other COROS session, which is how the COROS API works and is documented in the README
+- Logging in signing out every other COROS session, which is how the COROS API works and is documented on the [COROS connector page](https://docs.dreeve.app/connectors/coros-connector/)
