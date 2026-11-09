@@ -112,8 +112,9 @@ jobs:
           node-version: 26.13.0
           package-manager-cache: false
       - run: npm ci --ignore-scripts
-      - run: npx --no-install rulesync generate --check
-      - run: npx --no-install rulesync doctor --strict
+      - run: npm audit signatures
+      - run: npm exec --no -- rulesync generate --check
+      - run: npm exec --no -- rulesync doctor --strict
 
   ci_gate:
     name: CI gate
