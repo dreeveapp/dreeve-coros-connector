@@ -39,4 +39,4 @@ Package names say what each holds. What they don't say:
 
 ## Releasing
 
-Follow `RELEASING.md`. Keep the README's compose example runnable as-is: the end-to-end release run pastes it unchanged.
+Follow `RELEASING.md`. The end-to-end release run pastes the compose example from the [COROS connector page](https://docs.dreeve.app/connectors/coros-connector/) unchanged, so when a change touches the image, volumes, `user:`, commands or configuration, update that page in `dreeveapp/dreeve` (`docs/src/content/docs/connectors/coros-connector.mdx`) to match.
