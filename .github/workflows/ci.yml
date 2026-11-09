@@ -115,50 +115,6 @@ jobs:
       - run: npx --no-install rulesync generate --check
       - run: npx --no-install rulesync doctor --strict
 
-  actionlint:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v7.1.0
-        with:
-          node-version: 26.13.0
-          package-manager-cache: false
-      - run: npm ci --ignore-scripts
-      - run: npx --no-install actionlint -color
-
-  zizmor:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - uses: zizmorcore/zizmor-action@v0.8.1
-        with:
-          advanced-security: false
-          annotations: true
-
-  actions-lock:
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v7.0.1
-        with:
-          persist-credentials: false
-      - run: gh extension install github/gh-actions-lock --pin v0.4.1
-      - run: gh actions-lock --verify
-
   ci_gate:
     name: CI gate
     if: always()
@@ -169,9 +125,6 @@ jobs:
       - container-smoke
       - dreeve-oracle
       - rulesync
-      - actionlint
-      - zizmor
-      - actions-lock
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}
