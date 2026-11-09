@@ -1,11 +1,24 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>xballoy/renovate-config"],
+  "extends": [
+    "config:best-practices",
+    "schedule:earlyMondays",
+    ":enableVulnerabilityAlertsWithLabel(security)",
+    ":automergeMinor"
+  ],
+  "commitMessagePrefix": "build(deps):",
+  "labels": ["dependencies"],
+  "osvVulnerabilityAlerts": true,
+  "timezone": "America/Toronto",
   "constraints": {
     "ghActionsLock": "v0.4.1"
   },
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "Minor and Patch Updates"
+    },
     {
       "matchManagers": ["gomod"],
       "matchDepNames": ["go"],
