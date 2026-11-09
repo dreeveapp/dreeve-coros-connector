@@ -1,0 +1,94 @@
+name: Lint GitHub Actions
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  changes:
+    name: Detect workflow changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      github: ${{ steps.filter.outputs.github }}
+    steps:
+      - uses: dorny/paths-filter@v4.0.3
+        id: filter
+        with:
+          filters: |
+            github:
+              - '.github/**'
+              - 'package.json'
+              - 'package-lock.json'
+
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.github == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.8.1
+        with:
+          advanced-security: false
+          annotations: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 26.13.0
+          package-manager-cache: false
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify Node dependency signatures and provenance
+        run: npm audit signatures
+
+      - name: Run actionlint
+        run: npm exec --no -- actionlint -color
+
+      - name: Verify the actions lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-actions-lock --pin v0.4.1
+          gh actions-lock --verify
+
+  gate:
+    name: Lint gate
+    if: always()
+    needs: [changes, lint]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check lint outcome
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "Change detection did not succeed (result: $CHANGES_RESULT)"
+            exit 1
+          fi
+          if [ "$LINT_RESULT" = "failure" ] || [ "$LINT_RESULT" = "cancelled" ]; then
+            echo "Lint failed (result: $LINT_RESULT)"
+            exit 1
+          fi
+          echo "OK (changes: $CHANGES_RESULT, lint: $LINT_RESULT)"
