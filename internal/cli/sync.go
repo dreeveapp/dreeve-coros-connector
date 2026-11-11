@@ -35,6 +35,7 @@ type syncer struct {
 	fileMode   os.FileMode
 	dryRun     bool
 	writeTitle bool
+	sportTypes sportTypeFilter
 	log        *slog.Logger
 	secrets    *logging.Secrets
 }
@@ -64,7 +65,11 @@ func newSyncer(getenv Env, a *app) (*syncer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &syncer{dryRun: dryRun, writeTitle: writeTitle, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
+	sports, err := loadSportTypeFilter(getenv)
+	if err != nil {
+		return nil, err
+	}
+	return &syncer{dryRun: dryRun, writeTitle: writeTitle, sportTypes: sports, paths: loadPaths(getenv), lookback: lookback, limits: lim, client: client, zone: zone, since: envOr(getenv, "SINCE", "-30d"), fileMode: a.umask.apply(0o666), log: a.log, secrets: a.secrets}, nil
 }
 
 func syncOnce(ctx context.Context, getenv Env, a *app) error {
@@ -148,7 +153,7 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 	}
 	slices.SortStableFunc(activities, func(a, b coros.Activity) int { return cmp.Compare(a.StartTime, b.StartTime) })
 
-	var delivered, wouldDeliver, retry, attempted, deferred int
+	var delivered, wouldDeliver, retry, attempted, deferred, filtered int
 	completeUntil := today
 	keepInWindow := func(a coros.Activity) {
 		if day := startOfDay(time.Unix(a.StartTime, 0).In(s.zone)).AddDate(0, 0, -1); day.Before(completeUntil) {
@@ -158,6 +163,11 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 	for _, a := range activities {
 		if e, ok := l.Activities[a.LabelID]; ok && e.Status.Settled() {
 			s.log.Debug("already settled", "labelId", a.LabelID, "status", string(e.Status))
+			continue
+		}
+		if !s.sportTypes.syncs(a.SportType) {
+			filtered++
+			s.log.Info("filtered out by sport type", "labelId", a.LabelID, "name", a.Name, "sportType", a.SportType)
 			continue
 		}
 		if !safeLabelID.MatchString(a.LabelID) {
@@ -216,10 +226,10 @@ func (s *syncer) cycle(ctx context.Context, label string) (map[string]int, error
 		return statusCounts(l), &fatalError{err}
 	}
 	if s.dryRun {
-		s.log.Info(label+" dry run finished, nothing written", "listed", len(activities), "since", from.Format(time.DateOnly), "wouldDeliver", wouldDeliver, "maxPerCycle", s.limits.maxDownloads)
+		s.log.Info(label+" dry run finished, nothing written", "listed", len(activities), "since", from.Format(time.DateOnly), "wouldDeliver", wouldDeliver, "filtered", filtered, "maxPerCycle", s.limits.maxDownloads)
 		return statusCounts(l), nil
 	}
-	s.log.Info(label+" finished", "listed", len(activities), "since", from.Format(time.DateOnly), "delivered", delivered, "toRetry", retry, "leftForNextCycle", deferred)
+	s.log.Info(label+" finished", "listed", len(activities), "since", from.Format(time.DateOnly), "delivered", delivered, "filtered", filtered, "toRetry", retry, "leftForNextCycle", deferred)
 	return statusCounts(l), nil
 }
 
