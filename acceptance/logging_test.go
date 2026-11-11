@@ -31,6 +31,11 @@ type logRecord struct {
 	Time  *string `json:"time"`
 	Level *string `json:"level"`
 	Msg   *string `json:"msg"`
+
+	LabelID   string `json:"labelId"`
+	Name      string `json:"name"`
+	SportType *int   `json:"sportType"`
+	Filtered  *int   `json:"filtered"`
 }
 
 func jsonRecords(t *testing.T, what, output string) []logRecord {

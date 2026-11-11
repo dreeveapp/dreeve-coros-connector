@@ -1,8 +1,6 @@
 package acceptance_test
 
 import (
-	"bufio"
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -18,6 +16,7 @@ const (
 	multiSportID = "900000000000000014"
 	customID     = "900000000000000015"
 	hyroxID      = "900000000000000016"
+	legacyCustom = "900000000000000017"
 )
 
 func withSportType(code int) func(*fakecoros.Activity) {
@@ -52,52 +51,33 @@ func (w *world) assertDeliveredExactly(ids ...string) {
 	}
 }
 
-func jsonLines(t *testing.T, output string) []map[string]any {
-	t.Helper()
-	var lines []map[string]any
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		var line map[string]any
-		if err := json.Unmarshal(scanner.Bytes(), &line); err != nil {
-			t.Fatalf("line is not a JSON object: %v\n%s", err, scanner.Text())
-		}
-		lines = append(lines, line)
-	}
-	return lines
-}
-
-func filteredCount(t *testing.T, output string) float64 {
-	t.Helper()
-	for _, line := range jsonLines(t, output) {
-		if msg, _ := line["msg"].(string); strings.Contains(msg, "finished") {
-			n, ok := line["filtered"].(float64)
-			if !ok {
-				t.Fatalf("summary line has no filtered count: %v", line)
+func (w *world) assertFiltered(output string, want map[string]int) {
+	w.t.Helper()
+	logged := map[string]int{}
+	summaries := 0
+	for _, r := range jsonRecords(w.t, "sync-once", output) {
+		switch {
+		case *r.Msg == "filtered out by sport type":
+			if r.LabelID == "" || r.Name == "" || r.SportType == nil {
+				w.t.Errorf("filtered activity line lacks labelId, name or sportType: %+v", r)
+				continue
 			}
-			return n
+			logged[r.LabelID] = *r.SportType
+		case strings.HasSuffix(*r.Msg, "finished") || strings.HasSuffix(*r.Msg, "finished, nothing written"):
+			summaries++
+			if r.Filtered == nil || *r.Filtered != len(want) {
+				w.t.Errorf("summary line filtered count = %v, want %d", r.Filtered, len(want))
+			}
+		case strings.HasPrefix(*r.Msg, "dry run: would deliver") && want[r.LabelID] != 0:
+			w.t.Errorf("dry run would deliver filtered activity %s", r.LabelID)
 		}
 	}
-	t.Fatalf("no summary line in:\n%s", output)
-	return 0
-}
-
-func filteredLogged(t *testing.T, output string) map[string]float64 {
-	t.Helper()
-	logged := map[string]float64{}
-	for _, line := range jsonLines(t, output) {
-		if msg, _ := line["msg"].(string); !strings.Contains(msg, "filtered") {
-			continue
-		}
-		id, _ := line["labelId"].(string)
-		name, _ := line["name"].(string)
-		sport, ok := line["sportType"].(float64)
-		if id == "" || name == "" || !ok {
-			t.Errorf("filtered activity line lacks labelId, name or sportType: %v", line)
-			continue
-		}
-		logged[id] = sport
+	if !maps.Equal(logged, want) {
+		w.t.Errorf("filtered activities logged %v, want %v", logged, want)
 	}
-	return logged
+	if summaries != 1 {
+		w.t.Errorf("expected one summary line, got %d", summaries)
+	}
 }
 
 func TestEverySportTypeIsDeliveredByDefault(t *testing.T) {
@@ -120,12 +100,7 @@ func TestExcludedSportTypesAreNeitherDownloadedNorRecorded(t *testing.T) {
 	r := w.mustRun("sync-once")
 
 	w.assertDeliveredExactly(runID, trailRunID, customID, hyroxID)
-	if got, want := filteredLogged(t, r.stderr), map[string]float64{triathlonID: 10000, multiSportID: 10001}; !maps.Equal(got, want) {
-		t.Errorf("filtered activities logged %v, want %v", got, want)
-	}
-	if n := filteredCount(t, r.stderr); n != 2 {
-		t.Errorf("filtered count = %v, want 2", n)
-	}
+	w.assertFiltered(r.stderr, map[string]int{triathlonID: 10000, multiSportID: 10001})
 }
 
 func TestOnlyAllowedSportTypesAreDelivered(t *testing.T) {
@@ -170,14 +145,14 @@ func TestCustomSportMatchesEveryUserDefinedSport(t *testing.T) {
 	w := newWorld(t, 1, 1)
 	w.addActivity(runID, 3, withSportType(100))
 	w.addActivity(customID, 2, withSportType(9850))
-	w.addActivity(hyroxID, 1, withSportType(98))
+	w.addActivity(legacyCustom, 1, withSportType(98))
 	w.mustRun("login")
 	w.env["ACTIVITY_TYPES"] = "customSport"
 
 	w.mustRun("sync-once")
 
 	files := w.watchFiles()
-	if len(files) != 2 || files["coros_"+customID+".fit"] == nil || files["coros_"+hyroxID+".fit"] == nil {
+	if len(files) != 2 || files["coros_"+customID+".fit"] == nil || files["coros_"+legacyCustom+".fit"] == nil {
 		t.Fatalf("expected only the custom sports, got %v", keys(files))
 	}
 }
@@ -236,17 +211,7 @@ func TestDryRunReportsFilteredActivities(t *testing.T) {
 
 	r := w.mustRun("sync-once")
 
-	if got, want := filteredLogged(t, r.stderr), map[string]float64{triathlonID: 10000, multiSportID: 10001}; !maps.Equal(got, want) {
-		t.Errorf("filtered activities logged %v, want %v", got, want)
-	}
-	if n := filteredCount(t, r.stderr); n != 2 {
-		t.Errorf("filtered count = %v, want 2", n)
-	}
-	for _, line := range jsonLines(t, r.stderr) {
-		if msg, _ := line["msg"].(string); strings.Contains(msg, "would deliver") && (line["labelId"] == triathlonID || line["labelId"] == multiSportID) {
-			t.Errorf("dry run would deliver a filtered activity: %v", line)
-		}
-	}
+	w.assertFiltered(r.stderr, map[string]int{triathlonID: 10000, multiSportID: 10001})
 }
 
 func TestInvalidSportTypeSettingsFailAtStartup(t *testing.T) {
